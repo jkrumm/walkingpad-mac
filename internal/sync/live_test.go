@@ -258,7 +258,9 @@ func TestLive_Run_NoTombstoneWhenIdleAtShutdown(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 	cancel()
-	<-done
+	if err := <-done; err != nil {
+		t.Fatalf("Run returned %v after cancel, want nil", err)
+	}
 
 	if rec.count() != 0 {
 		t.Errorf("idle worker should not POST during run, got %d", rec.count())
