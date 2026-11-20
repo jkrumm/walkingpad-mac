@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/jkrumm/software-factory/master/schema/project.schema.json
+# How the factory ships this project (software-factory docs/project.md). Design and rows: docs/spec.md, docs/plan.yaml.
+apiVersion: factory/v2
+name: walkingpad-mac
+deploy:
+  mode: make # `make deploy` installs the host daemon into /Applications on the mini and restarts its LaunchAgent; `make verify` probes /health
+  targets:
+    - { name: mini, host: mini, verify: make verify }
+  hold: 0m # `make deploy` is synchronous
+ship:
+  - { via: push }
+lanes:
+  apple: 1 # one Xcode row at a time: xcodebuild runs on the one mini behind the shared Apple slot (dotfiles docs/apple-signing.md)
+signals:
+  github:
+    author: jkrumm # the owner's new issues come in
+    since: 2026-11-20T00:00:00Z # cut-over: older backlog is never filed

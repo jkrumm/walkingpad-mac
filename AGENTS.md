@@ -1,10 +1,14 @@
-# AGENTS.md — king-smith-walkingpad-mac
+# AGENTS.md — walkingpad-mac
 
-> **Naming.** The repo and Go module keep `king-smith-walkingpad-mac` for SEO.
-> Everything user-facing is `WalkingPad` (display) / `walkingpad` (CLI binary,
-> identifier, log paths). The `cmd/king-smith-walkingpad-mac/` directory matches
-> the repo; its compiled output is `bin/walkingpad`, installed to
-> `/Applications/WalkingPad.app/Contents/MacOS/walkingpad`.
+> **Naming.** The repo is `walkingpad-mac` (renamed from `king-smith-walkingpad-mac`
+> on 2026-11-20; the Go module path and `cmd/king-smith-walkingpad-mac/` follow in
+> plan row `rename-sweep`). Everything user-facing is `WalkingPad` (display) /
+> `walkingpad` (CLI binary, identifier, log paths). The compiled output is
+> `bin/walkingpad`, installed to `/Applications/WalkingPad.app/Contents/MacOS/walkingpad`.
+>
+> **Where this is going.** The Go daemon stays the host; a Swift menu bar app under
+> `apple/` becomes its client. Design: `docs/spec.md`. Rows: `docs/plan.yaml`.
+> How the factory ships the repo: `project.yaml`.
 
 Per-project guidance for coding agents. The global config (`~/.claude/CLAUDE.md` for Claude Code) applies; this file adds project-specific rules.
 
