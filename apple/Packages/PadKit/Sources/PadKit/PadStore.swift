@@ -32,6 +32,8 @@ public final class PadStore {
   @ObservationIgnored private let sleep: Sleeper
   @ObservationIgnored private let now: @Sendable () -> Date
   @ObservationIgnored private var nap: Task<Void, Never>?
+  /// A wake that came while a poll was in flight, so there was no wait to cut short yet.
+  @ObservationIgnored private var wakeRequested = false
   @ObservationIgnored private var speedTargetSetAt: Date?
   /// Bumped by `configure`, so an answer from the replaced host is dropped.
   @ObservationIgnored private var generation = 0
@@ -63,7 +65,9 @@ public final class PadStore {
   /// the popover opening) cuts the current wait short.
   public func run() async {
     while !Task.isCancelled {
+      wakeRequested = false
       await refresh()
+      if wakeRequested { continue }
       await pause(pollInterval ?? .seconds(3600))
     }
   }
@@ -108,6 +112,7 @@ public final class PadStore {
 
   /// Ends the current wait between two polls.
   public func wake() {
+    wakeRequested = true
     nap?.cancel()
   }
 
