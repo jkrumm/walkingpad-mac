@@ -28,6 +28,11 @@ func ResolveRemoteToken(dataDir, configured string) (string, error) {
 	if tok, err := readTokenFile(path); err != nil || tok != "" {
 		return tok, err
 	}
+	// An empty file (a crash between create and write) is not a token: O_EXCL
+	// below would refuse to replace it, so name it instead of serving 401 forever.
+	if _, err := os.Stat(path); err == nil {
+		return "", fmt.Errorf("%s is empty: delete it to generate a new token", path)
+	}
 
 	buf := make([]byte, 32)
 	if _, err := rand.Read(buf); err != nil {
@@ -41,8 +46,12 @@ func ResolveRemoteToken(dataDir, configured string) (string, error) {
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600) // #nosec G304 -- fixed name under the data dir
 	if err != nil {
 		if errors.Is(err, fs.ErrExist) {
-			// Lost a race with another process, or the file exists but is empty.
-			return readTokenFile(path)
+			// Lost a race with another process that has written the token by now.
+			tok, err := readTokenFile(path)
+			if err == nil && tok == "" {
+				err = fmt.Errorf("%s is empty: delete it to generate a new token", path)
+			}
+			return tok, err
 		}
 		return "", fmt.Errorf("create %s: %w", path, err)
 	}

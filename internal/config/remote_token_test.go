@@ -43,6 +43,16 @@ func TestResolveRemoteToken(t *testing.T) {
 		}
 	})
 
+	t.Run("empty file is an error, not an empty token", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, RemoteTokenFile), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if got, err := ResolveRemoteToken(dir, ""); err == nil {
+			t.Errorf("got %q, nil; want an error", got)
+		}
+	})
+
 	t.Run("existing file is trimmed and reused", func(t *testing.T) {
 		dir := t.TempDir()
 		if err := os.WriteFile(filepath.Join(dir, RemoteTokenFile), []byte("abc123\n"), 0o600); err != nil {
