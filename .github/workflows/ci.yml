@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+# A new push to a PR cancels its stale run; master runs never cancel each other.
+concurrency:
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  check:
+    # Public repo: hosted macOS minutes are free. Runner and Xcode as in ntfy-mac's ci.yml.
+    runs-on: macos-26 # pinned image; macos-latest drifts
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_26.6.app
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: raycast/.nvmrc
+          cache: npm
+          cache-dependency-path: raycast/package-lock.json
+
+      # The Makefile's lint target runs the binary; the version matches the mini's.
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.15.0
+          install-only: true
+
+      # SwiftPM build products and the pinned tools. The Xcode version is in the key because the
+      # compiler's module cache is not portable across versions.
+      - name: Cache SwiftPM and tools
+        uses: actions/cache@v6
+        with:
+          path: |
+            apple/Packages/PadKit/.build
+            .tools
+          key: spm-${{ runner.os }}-xcode-26.6-${{ hashFiles('apple/Packages/PadKit/Package.swift', 'apple/project.yml', 'scripts/tools.sh') }}
+          restore-keys: |
+            spm-${{ runner.os }}-xcode-26.6-
+
+      - name: Install Raycast dependencies
+        run: npm ci --prefix raycast
+
+      - name: Check
+        run: make check

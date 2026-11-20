@@ -9,6 +9,10 @@ deploy:
   hold: 0m # `make deploy` is synchronous
 ship:
   - { via: push }
+checks: # a lead runs check-fast (Go, Raycast, Swift lint, swift test); hosted macOS CI runs the full check, which adds the xcodebuild of apple/
+  fast: make check-fast
+  full: make check
+  ci: true
 lanes:
   apple: 1 # one Xcode row at a time: xcodebuild runs on the one mini behind the shared Apple slot (dotfiles docs/apple-signing.md)
 signals:

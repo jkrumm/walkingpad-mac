@@ -39,3 +39,10 @@ raycast/.raycast/
 
 # Claude Code transcripts / sub-agent output
 .claude/cache/
+
+# Swift client: generated Xcode project, derived data, SwiftPM build, pinned tools (scripts/tools.sh)
+/apple/WalkingPad.xcodeproj/
+/apple/.dd/
+/apple/Packages/*/.build/
+/apple/Packages/*/.swiftpm/
+/.tools/
