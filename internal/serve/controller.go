@@ -109,7 +109,7 @@ func (c *controller) startAtSpeed(ctx context.Context, speedKmh float64) error {
 
 // ensureRunning switches to manual mode and starts the belt unless it is
 // already ACTIVE or mid-ramp. Re-sending the start frame to a running P1 halts
-// it (PRD §8 / internal/AGENTS.md gotcha #4), so the state check is load-bearing, not an
+// it (docs/protocol.md §8, POST /start), so the state check is load-bearing, not an
 // optimization.
 func (c *controller) ensureRunning() error {
 	if state, connected := c.currentState(); connected && (state == ble.BeltActive || state.IsStarting()) {
