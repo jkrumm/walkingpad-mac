@@ -22,6 +22,10 @@ SWIFT_FILES   := apple/WalkingPad apple/Packages/PadKit/Sources apple/Packages/P
 PADKIT        := apple/Packages/PadKit
 TOOLS         := scripts/tools.sh
 APPLE_SLOT    := scripts/apple-slot.sh
+# make snapshots: a separate Debug build with SNAPSHOT_HARNESS (own derived data, so the app that
+# check-apple builds never contains the harness); PNGs land in SNAP_DIR.
+SNAP_APP      := apple/.dd-snap/Build/Products/Debug/WalkingPad.app
+SNAP_DIR      ?= apple/.snapshots
 
 VERSION       := $(shell ./scripts/build-version.sh)
 ROLLBACK_DIR  := $(HOME)/.local/state/$(BINARY)/rollback
@@ -66,6 +70,14 @@ lint-swift: ## swift format lint + SwiftLint (pinned by scripts/tools.sh) over a
 
 test-swift: ## swift test of apple/Packages/PadKit (decodes contracts/fixtures)
 	cd $(PADKIT) && swift test
+
+snapshots: ## draw the popover in every state and Settings, light and dark, offscreen into SNAP_DIR (SNAP_LIVE_URL adds the live host, GETs only)
+	cd apple && "$$(../$(TOOLS) xcodegen)" generate --quiet
+	$(APPLE_SLOT) xcodebuild -project apple/WalkingPad.xcodeproj -scheme WalkingPad -configuration Debug \
+	  -destination 'platform=macOS' -derivedDataPath apple/.dd-snap CODE_SIGNING_ALLOWED=NO \
+	  SWIFT_ACTIVE_COMPILATION_CONDITIONS='$$(inherited) SNAPSHOT_HARNESS' build
+	home=$$(mktemp -d) && trap 'rm -r "$$home"' EXIT && \
+	  HOME="$$home" CFFIXED_USER_HOME="$$home" $(SNAP_APP)/Contents/MacOS/WalkingPad --ui-snapshot "$(SNAP_DIR)"
 
 test-live: ## PadKit decodes GET /status and /sessions from the live host (reads only)
 	cd $(PADKIT) && PADKIT_LIVE_URL=http://127.0.0.1:$(HTTP_PORT) swift test --filter LiveHostTests
@@ -144,6 +156,6 @@ lint: ## run golangci-lint (pre-commit hook also runs this)
 	golangci-lint run ./...
 
 clean: ## remove build artifacts
-	rm -rf $(BIN_DIR) coverage.out apple/.dd apple/WalkingPad.xcodeproj $(PADKIT)/.build
+	rm -rf $(BIN_DIR) coverage.out apple/.dd apple/.dd-snap apple/.snapshots apple/WalkingPad.xcodeproj $(PADKIT)/.build
 
-.PHONY: help check check-fast check-apple lint-swift test-swift test-live contracts up deploy version rollback test verify logs scan fmt lint clean
+.PHONY: help check check-fast check-apple lint-swift test-swift snapshots test-live contracts up deploy version rollback test verify logs scan fmt lint clean

@@ -11,6 +11,7 @@ excluded:
   - apple/Packages/PadKit/.build
   - apple/WalkingPad.xcodeproj
   - apple/.dd
+  - apple/.dd-snap
   - .tools
   - raycast/node_modules
 

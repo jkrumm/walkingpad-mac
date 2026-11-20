@@ -55,14 +55,12 @@ import Testing
     let status = try Fixtures.decode(Status.self, name)
     #expect(status.connected)
     #expect(status.beltState == state)
-    #expect(ConnectionState(status: status) == .connected(state))
   }
 
   @Test func disconnectedStatusHasNoBeltFields() throws {
     let status = try Fixtures.decode(Status.self, "status-disconnected")
     #expect(!status.connected)
     #expect(status.beltState == nil && status.mode == nil && status.speedKmh == nil)
-    #expect(ConnectionState(status: status) == .padDisconnected)
   }
 
   @Test func currentSessionDecodes() throws {

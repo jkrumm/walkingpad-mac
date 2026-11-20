@@ -10,6 +10,11 @@ options:
 packages:
   PadKit:
     path: Packages/PadKit
+  # The global hotkeys and their recorder (Carbon, no permission prompt), pinned exactly as Iris pins
+  # it: the recorder broke on new macOS releases before.
+  KeyboardShortcuts:
+    url: https://github.com/sindresorhus/KeyboardShortcuts
+    exactVersion: 3.1.0
 
 settings:
   base:
@@ -31,6 +36,7 @@ targets:
     sources: [WalkingPad]
     dependencies:
       - package: PadKit
+      - package: KeyboardShortcuts
     settings:
       base:
         PRODUCT_NAME: WalkingPad

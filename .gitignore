@@ -43,6 +43,8 @@ raycast/.raycast/
 # Swift client: generated Xcode project, derived data, SwiftPM build, pinned tools (scripts/tools.sh)
 /apple/WalkingPad.xcodeproj/
 /apple/.dd/
+/apple/.dd-snap/
+/apple/.snapshots/
 /apple/Packages/*/.build/
 /apple/Packages/*/.swiftpm/
 /.tools/
