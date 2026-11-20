@@ -68,7 +68,8 @@ func TestContractFixtures(t *testing.T) {
 		{name: "sessions-empty", method: "GET", path: "/sessions?limit=3", status: 200},
 		{name: "session-detail", method: "GET", path: "/sessions/" + contractUUIDClosed, status: 200, setup: seedClosedSessions},
 		{name: "summary-all", method: "GET", path: "/summary?period=all", status: 200, setup: seedClosedSessions},
-		{name: "ok", method: "POST", path: "/speed", body: map[string]any{"speed_kmh": 3.5}, status: 200},
+		{name: "summary-days", method: "GET", path: "/summary/days?from=2026-05-16&to=2026-05-19", status: 200, setup: seedClosedSessions},
+		{name: "summary-days-empty", method: "GET", path: "/summary/days?from=2026-05-01&to=2026-05-03", status: 200}, {name: "ok", method: "POST", path: "/speed", body: map[string]any{"speed_kmh": 3.5}, status: 200},
 		{
 			name: "sync", method: "POST", path: "/sync/argo", status: 200,
 			setup: func(_ *testing.T, r *rig) { r.syncer.synced, r.syncer.failed = 2, 1 },

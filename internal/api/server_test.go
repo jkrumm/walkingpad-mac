@@ -116,7 +116,7 @@ func newRig(t *testing.T, token string) *rig {
 	statusFake := &fakeStatus{}
 	syncerFake := &fakeSyncer{}
 
-	s := New(Config{Addr: "127.0.0.1:0", Token: token, Version: "test"}, Deps{
+	s := New(Config{Addr: "127.0.0.1:0", Token: token, Version: "test", Location: time.UTC}, Deps{
 		Store:      st,
 		Manager:    mgr,
 		Controller: ctrl,
@@ -486,6 +486,65 @@ func TestSummary_UnknownPeriodRejected(t *testing.T) {
 	code, body := r.do(t, "GET", "/summary?period=year", nil)
 	if code != 400 {
 		t.Errorf("unknown period: status = %d body=%s", code, body)
+	}
+}
+
+// --- /summary/days ---------------------------------------------------------
+
+func TestSummaryDays(t *testing.T) {
+	r := newRig(t, "")
+	ctx := context.Background()
+	// 23:50 to 00:20: crosses midnight, counts on the day it started.
+	night := time.Date(2026, 7, 30, 23, 50, 0, 0, time.UTC)
+	id := mustOpen(t, r.store, "night", night)
+	mustClose(t, r.store, id, night.Add(30*time.Minute), store.SessionTotals{DurationS: 1800, DistanceM: 2000, Steps: 3000, Kcal: 90})
+	if _, err := r.store.OpenSession(ctx, "open", time.Date(2026, 8, 1, 9, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatal(err)
+	}
+
+	code, body := r.do(t, "GET", "/summary/days?from=2026-07-29&to=2026-08-01", nil)
+	if code != 200 {
+		t.Fatalf("status = %d body=%s", code, body)
+	}
+	var got summaryDaysResponse
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.From != "2026-07-29" || got.To != "2026-08-01" || len(got.Days) != 4 {
+		t.Fatalf("range wrong: %+v", got)
+	}
+	for i, wantDistance := range []float64{0, 2000, 0, 0} {
+		if got.Days[i].DistanceM != wantDistance {
+			t.Errorf("day %s distance = %v, want %v", got.Days[i].Date, got.Days[i].DistanceM, wantDistance)
+		}
+	}
+	if got.Days[1].Date != "2026-07-30" || got.Days[1].Sessions != 1 || got.Days[2].Sessions != 0 {
+		t.Errorf("midnight session not on its start day: %+v", got.Days)
+	}
+}
+
+func TestSummaryDays_Validation(t *testing.T) {
+	r := newRig(t, "")
+	tests := []struct {
+		name, query string
+		status      int
+	}{
+		{"single day", "from=2026-07-30&to=2026-07-30", 200},
+		{"a year is allowed", "from=2025-07-30&to=2026-07-30", 200},
+		{"missing from", "to=2026-07-30", 400},
+		{"missing to", "from=2026-07-30", 400},
+		{"not a date", "from=yesterday&to=2026-07-30", 400},
+		{"timestamp instead of a date", "from=2026-07-30T00:00:00Z&to=2026-07-30", 400},
+		{"reversed", "from=2026-07-31&to=2026-07-30", 400},
+		{"too long", "from=2024-01-01&to=2026-07-30", 400},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			code, body := r.do(t, "GET", "/summary/days?"+tc.query, nil)
+			if code != tc.status {
+				t.Errorf("status = %d body=%s, want %d", code, body, tc.status)
+			}
+		})
 	}
 }
 

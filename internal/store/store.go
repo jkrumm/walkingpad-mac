@@ -125,6 +125,18 @@ type Summary struct {
 	Kcal      float64
 }
 
+// DayTotals is the closed sessions of one calendar day. A session counts on the
+// day it started, so a walk that crosses midnight is not split.
+type DayTotals struct {
+	// Date is the calendar day, "2006-01-02", in the location the query asked for.
+	Date      string
+	Sessions  int64
+	DurationS int64
+	DistanceM float64
+	Steps     int64
+	Kcal      float64
+}
+
 // Period enumerates the windows the /summary endpoint supports.
 type Period string
 
@@ -529,6 +541,74 @@ func (s *Store) Summary(ctx context.Context, period Period, now time.Time) (Summ
 		return Summary{}, fmt.Errorf("summary: %w", err)
 	}
 	return sum, nil
+}
+
+// DateLayout is the calendar-day format of DayTotals.Date and of the day
+// range the API accepts.
+const DateLayout = "2006-01-02"
+
+// DailyTotals returns one entry per calendar day from the day of from to the
+// day of to inclusive, in loc, oldest first. A day without sessions is present
+// with zero totals, so a chart needs no gap filling. Open sessions are left
+// out, as in Summary.
+func (s *Store) DailyTotals(ctx context.Context, from, to time.Time, loc *time.Location) ([]DayTotals, error) {
+	fy, fm, fd := from.In(loc).Date()
+	ty, tm, td := to.In(loc).Date()
+	first := time.Date(fy, fm, fd, 0, 0, 0, 0, loc)
+	end := time.Date(ty, tm, td, 0, 0, 0, 0, loc).AddDate(0, 0, 1)
+	if !end.After(first) {
+		return nil, fmt.Errorf("daily totals: to %s is before from %s", to.Format(DateLayout), from.Format(DateLayout))
+	}
+
+	var days []DayTotals
+	index := map[string]int{}
+	for d := first; d.Before(end); d = d.AddDate(0, 0, 1) {
+		index[d.Format(DateLayout)] = len(days)
+		days = append(days, DayTotals{Date: d.Format(DateLayout)})
+	}
+
+	// started_at is stored as RFC3339Nano text, which does not sort exactly at the
+	// second (a trimmed fraction), so the SQL window is a day wider on each side
+	// and the day of each row is decided here.
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT started_at, duration_s, distance_m, steps, kcal
+		FROM sessions
+		WHERE ended_at IS NOT NULL AND started_at >= ? AND started_at < ?`,
+		formatTime(first.AddDate(0, 0, -1)), formatTime(end.AddDate(0, 0, 1)))
+	if err != nil {
+		return nil, fmt.Errorf("daily totals: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	for rows.Next() {
+		var (
+			startedAt string
+			durationS int64
+			distanceM float64
+			steps     int64
+			kcal      float64
+		)
+		if err := rows.Scan(&startedAt, &durationS, &distanceM, &steps, &kcal); err != nil {
+			return nil, fmt.Errorf("daily totals: %w", err)
+		}
+		started, err := parseTime(startedAt)
+		if err != nil {
+			return nil, fmt.Errorf("daily totals: %w", err)
+		}
+		i, ok := index[started.In(loc).Format(DateLayout)]
+		if !ok {
+			continue
+		}
+		days[i].Sessions++
+		days[i].DurationS += durationS
+		days[i].DistanceM += distanceM
+		days[i].Steps += steps
+		days[i].Kcal += kcal
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("daily totals: %w", err)
+	}
+	return days, nil
 }
 
 // periodSince returns the inclusive lower bound for the given period in the

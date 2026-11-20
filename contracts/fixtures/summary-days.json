@@ -1,0 +1,38 @@
+{
+  "from": "2026-05-16",
+  "to": "2026-05-19",
+  "days": [
+    {
+      "date": "2026-05-16",
+      "sessions": 0,
+      "duration_s": 0,
+      "distance_m": 0,
+      "steps": 0,
+      "kcal": 0
+    },
+    {
+      "date": "2026-05-17",
+      "sessions": 1,
+      "duration_s": 754,
+      "distance_m": 942,
+      "steps": 1450,
+      "kcal": 38.2
+    },
+    {
+      "date": "2026-05-18",
+      "sessions": 1,
+      "duration_s": 1800,
+      "distance_m": 2100.5,
+      "steps": 3300,
+      "kcal": 96.4
+    },
+    {
+      "date": "2026-05-19",
+      "sessions": 0,
+      "duration_s": 0,
+      "distance_m": 0,
+      "steps": 0,
+      "kcal": 0
+    }
+  ]
+}

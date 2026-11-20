@@ -96,6 +96,21 @@ type summaryResponse struct {
 	Kcal      float64 `json:"kcal"`
 }
 
+type dayTotalsJSON struct {
+	Date      string  `json:"date"`
+	Sessions  int64   `json:"sessions"`
+	DurationS int64   `json:"duration_s"`
+	DistanceM float64 `json:"distance_m"`
+	Steps     int64   `json:"steps"`
+	Kcal      float64 `json:"kcal"`
+}
+
+type summaryDaysResponse struct {
+	From string          `json:"from"`
+	To   string          `json:"to"`
+	Days []dayTotalsJSON `json:"days"`
+}
+
 type syncResponse struct {
 	Synced int `json:"synced"`
 	Failed int `json:"failed"`

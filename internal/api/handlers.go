@@ -235,6 +235,58 @@ func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// maxSummaryDays bounds one /summary/days answer; a year of a chart is the use.
+const maxSummaryDays = 366
+
+func (s *Server) handleSummaryDays(w http.ResponseWriter, r *http.Request) {
+	loc := s.cfg.Location
+	if loc == nil {
+		loc = time.Local
+	}
+	parse := func(name string) (time.Time, bool) {
+		v := r.URL.Query().Get(name)
+		t, err := time.ParseInLocation(store.DateLayout, v, loc)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, name+" must be a date, YYYY-MM-DD")
+			return time.Time{}, false
+		}
+		return t, true
+	}
+	from, ok := parse("from")
+	if !ok {
+		return
+	}
+	to, ok := parse("to")
+	if !ok {
+		return
+	}
+	if to.Before(from) {
+		writeError(w, http.StatusBadRequest, "to must not be before from")
+		return
+	}
+	if to.Sub(from) > maxSummaryDays*24*time.Hour {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("range is limited to %d days", maxSummaryDays))
+		return
+	}
+
+	days, err := s.deps.Store.DailyTotals(r.Context(), from, to, loc)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	out := summaryDaysResponse{
+		From: from.Format(store.DateLayout), To: to.Format(store.DateLayout),
+		Days: make([]dayTotalsJSON, 0, len(days)),
+	}
+	for _, d := range days {
+		out.Days = append(out.Days, dayTotalsJSON{
+			Date: d.Date, Sessions: d.Sessions, DurationS: d.DurationS,
+			DistanceM: d.DistanceM, Steps: d.Steps, Kcal: d.Kcal,
+		})
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
 // --- /sync/argo ------------------------------------------------------------
 
 func (s *Server) handleSyncArgo(w http.ResponseWriter, r *http.Request) {

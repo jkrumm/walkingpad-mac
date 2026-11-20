@@ -211,7 +211,23 @@ Listens on `127.0.0.1:7706` (configurable). Loopback-only; no TLS. Bearer-token 
 | `GET /sessions` | — | `{"sessions":[…]}` | Paginated: `?limit=` `?before=`. |
 | `GET /sessions/:uuid` | — | full session + samples | |
 | `GET /summary?period=today\|week\|month\|all` | — | aggregates | For Raycast home / menu-bar tooltips. |
+| `GET /summary/days?from=YYYY-MM-DD&to=YYYY-MM-DD` | — | one total per calendar day | For the app's History chart. See below. |
 | `POST /sync/argo` | — | `{"synced":N,"failed":M}` | Manual trigger (otherwise nightly + post-session). |
+
+### Totals per day (`GET /summary/days`)
+
+`from` and `to` are calendar dates (`YYYY-MM-DD`), both inclusive and both required; `to` before `from` or a range over 366 days is a 400. The answer holds one entry per day, oldest first, **including days without sessions** (all zeros), so a chart needs no gap filling:
+
+```json
+{"from":"2026-05-16","to":"2026-05-17","days":[
+  {"date":"2026-05-16","sessions":0,"duration_s":0,"distance_m":0,"steps":0,"kcal":0},
+  {"date":"2026-05-17","sessions":1,"duration_s":754,"distance_m":942,"steps":1450,"kcal":38.2}]}
+```
+
+- A day is a calendar day in the host's local time zone (`Config.Location`, default the host's), the same clock as `/summary?period=today`.
+- A session counts whole on the day it **started**; one that crosses midnight is not split.
+- Only closed sessions count, as in `/summary`.
+- Golden files: `contracts/fixtures/summary-days.json`, `summary-days-empty.json`.
 
 ### Live status response shape
 

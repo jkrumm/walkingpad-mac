@@ -39,6 +39,9 @@ type Config struct {
 	Token string
 	// Version is reported by /health.
 	Version string
+	// Location decides which calendar day a session belongs to in
+	// /summary/days. Nil means the host's local time zone.
+	Location *time.Location
 }
 
 // Deps bundles the runtime collaborators the handlers need.
@@ -115,6 +118,7 @@ func (s *Server) routes() http.Handler {
 	mux.Handle("GET /sessions", s.auth(s.handleListSessions))
 	mux.Handle("GET /sessions/{uuid}", s.auth(s.handleGetSession))
 	mux.Handle("GET /summary", s.auth(s.handleSummary))
+	mux.Handle("GET /summary/days", s.auth(s.handleSummaryDays))
 	mux.Handle("POST /sync/argo", s.auth(s.handleSyncArgo))
 
 	return logRequest(s.deps.Logger, mux)
