@@ -80,6 +80,45 @@ func (d gateDialer) Pick(ctx context.Context, timeout time.Duration) (Discovered
 	return d.fakeDialer.Pick(ctx, timeout)
 }
 
+func TestLink_ClearsAdapterStateWhenOnlyThePadIsMissing(t *testing.T) {
+	var enableCalls atomic.Int32
+	dialer := gateDialer{
+		fakeDialer: &fakeDialer{pickErr: errors.New("no WalkingPad found in 8s")},
+		gate:       &adapterGate{enable: failingEnable(1, &enableCalls)},
+	}
+
+	var mu sync.Mutex
+	var states []error
+	link := NewLink(LinkConfig{
+		Logger:   quietLogger(),
+		OnStatus: func(Status) {},
+		OnAdapterState: func(err error) {
+			mu.Lock()
+			defer mu.Unlock()
+			states = append(states, err)
+		},
+	}).WithDialer(dialer)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { _ = link.Run(ctx); close(done) }()
+	defer func() { cancel(); <-done }()
+
+	// Enable fails once (adapter error), then works while the pad is still off.
+	if !waitUntil(3*time.Second, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(states) >= 2
+	}) {
+		t.Fatal("no second adapter state report")
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if !errors.Is(states[0], ErrAdapterNotReady) || states[1] != nil {
+		t.Errorf("adapter states = %v, want [ErrAdapterNotReady nil]", states)
+	}
+}
+
 func TestLink_ConnectsAfterAdapterEnableRecovers(t *testing.T) {
 	var enableCalls atomic.Int32
 	dialer := gateDialer{

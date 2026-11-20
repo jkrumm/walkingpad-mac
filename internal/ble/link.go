@@ -216,14 +216,15 @@ func (l *Link) Run(ctx context.Context) error {
 }
 
 // reportAdapter forwards whether the last resolve or dial failed because the
-// adapter is not ready (err wraps ErrAdapterNotReady) or worked (nil). Other
-// errors say nothing about the adapter and leave the last state alone.
+// adapter is not ready (err wraps ErrAdapterNotReady) or worked (nil). Any
+// other error ("no WalkingPad found", a failed connect) means the call got
+// past the adapter, so it clears an earlier adapter error.
 func (l *Link) reportAdapter(err error) {
 	if l.cfg.OnAdapterState == nil {
 		return
 	}
-	if err != nil && !errors.Is(err, ErrAdapterNotReady) {
-		return
+	if !errors.Is(err, ErrAdapterNotReady) {
+		err = nil
 	}
 	l.cfg.OnAdapterState(err)
 }
