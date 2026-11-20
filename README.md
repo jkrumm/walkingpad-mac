@@ -164,14 +164,17 @@ session-grouping logic.
 make            # default — show the menu
 make up         # rebuild daemon + deploy + start Raycast dev (the only command you need)
 make test       # go test -race + raycast tsc --noEmit
+make check-fast # Go, Raycast and Swift lint + tests, no Xcode build
+make check      # check-fast + the Xcode build of the Swift app (what CI runs)
+make contracts  # rewrite contracts/fixtures after an intended API change
 make logs       # tail /tmp/walkingpad.log
 make lint       # golangci-lint
-make fmt        # gofmt + go mod tidy
+make fmt        # gofmt + go mod tidy + swift format
 make scan       # BLE device discovery (dev tool)
 make clean      # remove ./bin
 ```
 
-Read [`AGENTS.md`](./AGENTS.md) before extending. It captures the non-obvious gotchas (BLE rate limit, CRC scope, `.app` bundle requirement, etc.).
+Read [`AGENTS.md`](./AGENTS.md) before extending, and [`internal/AGENTS.md`](./internal/AGENTS.md) before touching the Go host: it captures the non-obvious BLE gotchas (rate limit, CRC scope, `.app` bundle requirement, etc.).
 
 ## Credits
 

@@ -319,7 +319,7 @@ func (m *Manager) Ingest(ctx context.Context, frame ble.Status, now time.Time) e
 		// Non-running frame: close the active window (the seconds we've been
 		// running just became part of closedActiveS) and drop the device-
 		// counter baseline so the next running frame starts a fresh delta
-		// window (the belt may reset its counters across STANDBY — gotcha #8).
+		// window (the belt may reset its counters across STANDBY — internal/AGENTS.md gotcha #8).
 		m.cur.closeActiveWindow(now)
 		m.cur.lastDevDistance = 0
 		m.cur.lastDevSteps = 0
