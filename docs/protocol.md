@@ -257,6 +257,8 @@ Listens on `127.0.0.1:7706` (configurable). Loopback-only; no TLS. Bearer-token 
 
 `samples` is a small ring of the last ~60 s — used by the menu-bar sparkline.
 
+`adapter_error` (string, omitted when empty) appears only while `connected` is false and the host's Bluetooth adapter is the reason: off, not authorized, or still powering on. It holds the CoreBluetooth cause, and the daemon keeps retrying the adapter without a restart.
+
 ## macOS Bluetooth permission and deployment
 
 

@@ -55,9 +55,13 @@ func TestStatusProvider_AdapterState(t *testing.T) {
 	if got := sp.AdapterError(); got != "" {
 		t.Errorf("initial adapter error = %q", got)
 	}
-	sp.setAdapterState(fmt.Errorf("%w: %w", ble.ErrAdapterNotReady, errors.New("timeout enabling CentralManager")))
-	if got := sp.AdapterError(); got != "timeout enabling CentralManager" {
-		t.Errorf("adapter error = %q", got)
+	cause := fmt.Errorf("%w: %w", ble.ErrAdapterNotReady, errors.New("timeout enabling CentralManager"))
+	// Pinned address: the error arrives from Dial as is. Unpinned: Pick wraps it in "scan: ".
+	for _, err := range []error{cause, fmt.Errorf("scan: %w", cause)} {
+		sp.setAdapterState(err)
+		if got := sp.AdapterError(); got != "timeout enabling CentralManager" {
+			t.Errorf("adapter error for %q = %q", err, got)
+		}
 	}
 	sp.setAdapterState(nil)
 	if got := sp.AdapterError(); got != "" {

@@ -74,9 +74,14 @@ func (s *statusProvider) AdapterError() string {
 	return s.adapter
 }
 
-// adapterReason is the CoreBluetooth cause without the package prefixes.
+// adapterReason is the CoreBluetooth cause without the wrapping prefixes
+// ("scan: " on the unpinned path, the ErrAdapterNotReady text on both).
 func adapterReason(err error) string {
-	return strings.TrimPrefix(err.Error(), ble.ErrAdapterNotReady.Error()+": ")
+	msg := err.Error()
+	if _, cause, ok := strings.Cut(msg, ble.ErrAdapterNotReady.Error()+": "); ok {
+		return cause
+	}
+	return msg
 }
 
 // LastFrame implements api.StatusProvider.
