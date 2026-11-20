@@ -18,6 +18,9 @@ final class ScriptedHost: HTTPTransport, Sendable {
     var writes: [(path: String, body: String?)] = []
     var holds: [CheckedContinuation<Void, Never>] = []
     var holdWrites = false
+    var holdStatus = false
+    var statusHolds: [CheckedContinuation<Void, Never>] = []
+    var statusReads = 0
     var writeAnswer: Answer = .fixture("ok")
   }
 
@@ -28,6 +31,11 @@ final class ScriptedHost: HTTPTransport, Sendable {
   var writes: [String] { state.withLock { $0.writes.map(\.path) } }
   var writeBodies: [String?] { state.withLock { $0.writes.map(\.body) } }
   var heldWrites: Int { state.withLock { $0.holds.count } }
+  var heldStatus: Int { state.withLock { $0.statusHolds.count } }
+  var statusReads: Int { state.withLock { $0.statusReads } }
+
+  /// `/status` waits until `release()`.
+  func holdStatus() { state.withLock { $0.holdStatus = true } }
 
   /// Writes wait until `release()`.
   func holdWrites() { state.withLock { $0.holdWrites = true } }
@@ -35,8 +43,12 @@ final class ScriptedHost: HTTPTransport, Sendable {
   func release() {
     let holds = state.withLock { state in
       state.holdWrites = false
-      defer { state.holds = [] }
-      return state.holds
+      state.holdStatus = false
+      defer {
+        state.holds = []
+        state.statusHolds = []
+      }
+      return state.holds + state.statusHolds
     }
     for hold in holds { hold.resume() }
   }
@@ -45,6 +57,15 @@ final class ScriptedHost: HTTPTransport, Sendable {
     let url = try #require(request.url)
     let answer: Answer
     if request.httpMethod == "GET" {
+      let hold = state.withLock { state in
+        state.statusReads += 1
+        return state.holdStatus
+      }
+      if hold {
+        await withCheckedContinuation { continuation in
+          state.withLock { $0.statusHolds.append(continuation) }
+        }
+      }
       answer = state.withLock { $0.status }
     } else {
       let body = request.httpBody.flatMap { String(bytes: $0, encoding: .utf8) }
@@ -244,6 +265,35 @@ final class RecordingSleeper: Sendable {
     #expect(host.writeBodies == [#"{"speed_kmh":5}"#, #"{"speed_kmh":6}"#])
   }
 
+  @Test func aQueuedSpeedIsDroppedWhenTheBeltStoppedMeanwhile() async throws {
+    let store = try store()
+    host.answer(.fixture("status-active"))
+    await store.refresh()
+    host.holdWrites()
+    let first = Task { await store.changeSpeed(by: 1) }
+    await settle { host.heldWrites == 1 }
+    await store.changeSpeed(by: 1)
+    host.answer(.fixture("status-stopped"))  // the pad's remote stopped the belt
+    host.release()
+    await first.value
+    #expect(host.writeBodies == [#"{"speed_kmh":5}"#], "/speed would start the stopped belt")
+    #expect(store.phase == .standby && store.command == nil)
+  }
+
+  @Test func aWakeDuringAPollIsNotLost() async throws {
+    let sleeper = RecordingSleeper(limit: 1)
+    let store = try store(sleeper: sleeper)
+    host.holdStatus()
+    let loop = Task { await store.run() }
+    defer { loop.cancel() }
+    await settle { host.heldStatus == 1 }
+    store.setPopoverOpen(true)
+    host.release()
+    await settle { sleeper.durations.count == 1 }
+    #expect(host.statusReads == 2, "the wake polls again at once instead of waiting")
+    #expect(sleeper.durations == [PollingPolicy.fast])
+  }
+
   @Test func aFailedCommandIsReported() async throws {
     let store = try store()
     await store.refresh()
@@ -259,6 +309,24 @@ final class RecordingSleeper: Sendable {
     await store.refresh()
     #expect(store.status != nil)
     store.configure(nil)
+    #expect(store.phase == .unconfigured && store.status == nil)
+
+    let other = ScriptedHost()
+    other.answer(.fixture("status-active"))
+    store.configure(PadClient(baseURL: try #require(base), transport: other))
+    #expect(store.phase == .connecting)
+    await store.refresh()
+    #expect(store.phase == .active)
+  }
+
+  @Test func anAnswerFromAReplacedHostIsDropped() async throws {
+    let store = try store()
+    host.holdStatus()
+    let stale = Task { await store.refresh() }
+    await settle { host.heldStatus == 1 }
+    store.configure(nil)
+    host.release()
+    await stale.value
     #expect(store.phase == .unconfigured && store.status == nil)
   }
 }

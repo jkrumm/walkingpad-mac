@@ -24,6 +24,9 @@ final class SettingsModel {
   @ObservationIgnored private var savedHostURL: String
   @ObservationIgnored private var savedToken: String
   @ObservationIgnored private var startSpeedSave: Task<Void, Never>?
+  /// The Keychain refused the read (a rebuilt binary it does not trust yet): an empty field then
+  /// means "unknown", and Connect must not delete the stored token.
+  @ObservationIgnored private let tokenUnreadable: Bool
 
   init(
     store: PadStore, preferences: HostPreferences, tokens: any TokenStore,
@@ -33,7 +36,15 @@ final class SettingsModel {
     self.preferences = preferences
     self.tokens = tokens
     loginItems = loginItem
-    let token = (try? tokens.read()) ?? ""
+    var token = ""
+    var readError: String?
+    do {
+      token = try tokens.read() ?? ""
+    } catch {
+      readError = "The stored token could not be read: \(error.localizedDescription)"
+    }
+    tokenUnreadable = readError != nil
+    connectError = readError
     hostURL = preferences.hostURL
     self.token = token
     savedHostURL = preferences.hostURL
@@ -61,7 +72,11 @@ final class SettingsModel {
       return
     }
     do {
-      token.isEmpty ? try tokens.delete() : try tokens.save(token)
+      if !token.isEmpty {
+        try tokens.save(token)
+      } else if !tokenUnreadable {
+        try tokens.delete()
+      }
     } catch {
       connectError = "The token could not be stored: \(error.localizedDescription)"
       return
