@@ -87,6 +87,19 @@ import Testing
         == ["starting", "active", "stopping", "stopped", "standby", "unknown(1)"])
   }
 
+  /// Go's RFC3339Nano trims trailing zeros, so a live instant carries 0 to 9 fraction digits.
+  @Test(arguments: [
+    ("2026-11-20T15:59:01Z", 0.0),
+    ("2026-11-20T15:59:01.5Z", 0.5),
+    ("2026-11-20T15:59:01.123Z", 0.123),
+    ("2026-11-20T15:59:01.123456Z", 0.123_456),
+    ("2026-11-20T15:59:01.12345678Z", 0.123_456_78),
+  ])
+  func goFractionDigitsParse(raw: String, fraction: Double) throws {
+    let date = try #require(WireCoding.parseDate(raw))
+    #expect(abs(date.timeIntervalSince1970 - (1_795_190_341 + fraction)) < 0.001)
+  }
+
   @Test func goNanosecondInstantsParse() throws {
     let date = try #require(WireCoding.parseDate("2026-11-20T15:59:01.123456789Z"))
     #expect(abs(date.timeIntervalSince1970 - 1_795_190_341.123_457) < 0.001)
