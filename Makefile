@@ -17,7 +17,10 @@ LOG_ERR       := $(LOG_DIR)/$(BINARY).err
 HTTP_PORT     := 7706
 DATA_DIR      := $(HOME)/Library/Application Support/$(APP_NAME)
 
-VERSION       := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+VERSION       := $(shell ./scripts/build-version.sh)
+ROLLBACK_DIR  := $(HOME)/.local/state/$(BINARY)/rollback
+ROLLBACK_APP  := $(ROLLBACK_DIR)/$(APP_NAME).app
+HEALTH_URL    := http://127.0.0.1:$(HTTP_PORT)/health
 LDFLAGS       := -ldflags "-X main.Version=$(VERSION) -s -w"
 
 .DEFAULT_GOAL := help
@@ -44,7 +47,7 @@ check: ## run all local validation (gofmt, vet, lint, tests) — non-zero on fai
 up: deploy ## rebuild daemon, deploy, reload, verify, start Raycast dev (the one command for everything)
 	@./scripts/raycast-dev.sh
 
-deploy: ## ship the current build to /Applications and restart the LaunchAgent (no hardware, no Raycast)
+deploy: ## ship the current build to /Applications and restart the LaunchAgent (refuses mid-walk; FORCE=1 overrides)
 	@mkdir -p $(BIN_DIR)
 	go build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY) $(CMD_DIR)
 	./scripts/build-app-bundle.sh $(BIN_DIR)/$(BINARY) $(VERSION) $(APP_BUNDLE)
@@ -54,16 +57,34 @@ deploy: ## ship the current build to /Applications and restart the LaunchAgent (
 	  ./scripts/install-launch-agent.sh $(PLIST_TMPL) $(PLIST_DST); \
 	  launchctl load -w $(PLIST_DST); \
 	fi
+	@./scripts/deploy-guard.sh
+	@if [ -d $(APP_INSTALL) ]; then \
+	  rm -rf $(ROLLBACK_DIR) && mkdir -p $(ROLLBACK_DIR) && ditto $(APP_INSTALL) $(ROLLBACK_APP) \
+	    && echo "rollback copy : $(ROLLBACK_APP)"; \
+	fi
 	rm -rf $(APP_INSTALL)
 	cp -R $(APP_BUNDLE) $(APP_INSTALL)
 	launchctl kickstart -k gui/$$(id -u)/$(PLIST_LABEL)
 	@sleep 1
 	@printf "daemon source : \033[1m%s\033[0m\n" "$(VERSION)"
-	@printf "daemon live   : "
-	@curl -fs http://127.0.0.1:$(HTTP_PORT)/health | python3 -c 'import json,sys;d=json.load(sys.stdin);print(d.get("version","?"))' 2>/dev/null || echo "(no /health response yet — agent may still be booting)"
+	@printf "daemon live   : %s\n" "$$($(MAKE) --no-print-directory version 2>/dev/null || echo '(no /health response yet — agent may still be booting)')"
 	@echo "---"
 
+version: ## print the sha the live daemon reports on /health (exit 1 when it does not answer)
+	@v=$$(curl -fsS --max-time 3 $(HEALTH_URL) 2>/dev/null | sed -n 's/.*"version":"\([^"]*\)".*/\1/p'); \
+	  if [ -n "$$v" ]; then echo "$$v"; else echo "walkingpad: no version from $(HEALTH_URL)" >&2; exit 1; fi
+
+rollback: ## reinstall the bundle the last deploy replaced and restart the LaunchAgent (refuses mid-walk; FORCE=1 overrides)
+	@[ -d $(ROLLBACK_APP) ] || { echo "rollback: no saved bundle at $(ROLLBACK_APP)" >&2; exit 1; }
+	@./scripts/deploy-guard.sh
+	rm -rf $(APP_INSTALL)
+	ditto $(ROLLBACK_APP) $(APP_INSTALL)
+	launchctl kickstart -k gui/$$(id -u)/$(PLIST_LABEL)
+	@sleep 1
+	@printf "daemon live   : %s\n" "$$($(MAKE) --no-print-directory version 2>/dev/null || echo '(no /health response yet)')"
+
 test: ## run all tests (Go race + Raycast typecheck)
+	./scripts/test-deploy-guard.sh
 	go test -race -count=1 ./...
 	cd raycast && npx tsc --noEmit
 
@@ -94,4 +115,4 @@ lint: ## run golangci-lint (pre-commit hook also runs this)
 clean: ## remove build artifacts
 	rm -rf $(BIN_DIR) coverage.out
 
-.PHONY: help check up deploy test verify logs scan fmt lint clean
+.PHONY: help check up deploy version rollback test verify logs scan fmt lint clean

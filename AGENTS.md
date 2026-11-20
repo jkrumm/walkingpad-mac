@@ -26,7 +26,7 @@ for agents.
 | Layer | Choice | Why |
 |-|-|-|
 | Daemon language | **Go 1.26+** | Single binary, easy LaunchAgent, native macOS Bluetooth via cgo |
-| BLE library | **`tinygo.org/x/bluetooth` v0.10.0** | Only cross-platform Go BLE lib; verified on P1 by tim-oster |
+| BLE library | **`tinygo.org/x/bluetooth` v0.16.0** | Only cross-platform Go BLE lib; the P1 protocol is verified by tim-oster on v0.10.0, v0.16.0 is unproven on the hardware until the first deploy connects |
 | SQLite driver | **`modernc.org/sqlite`** | Pure Go (no CGO) — keeps cross-compile easy |
 | HTTP | **stdlib `net/http`** | Loopback only, no framework needed |
 | Logging | **`log/slog`** → JSONL on disk + pretty on stderr | Standard library, structured |
@@ -58,6 +58,21 @@ live `/health` version, then starts the Raycast dev loop. `make deploy` runs
 just the ship/restart half — build, install the `.app`, kickstart the agent —
 with no Raycast dev loop and no commands sent to the belt.
 
+- **Guard.** Before the swap, `make deploy` reads `GET /status` and refuses when
+  `belt_state` is anything but `stopped` or `standby`, naming the state — a restart
+  drops the BLE link and cuts the session. `FORCE=1 make deploy` overrides. A
+  `/status` that does not answer, or carries no `belt_state` (pad not connected),
+  lets the deploy proceed. Logic: `scripts/deploy-guard.sh`, table test
+  `scripts/test-deploy-guard.sh` (runs in `make test`).
+- **Rollback.** `make deploy` first copies the bundle it replaces to
+  `~/.local/state/walkingpad/rollback/WalkingPad.app` (one copy, overwritten by the
+  next deploy). `make rollback` reinstalls it and kickstarts `com.jkrumm.walkingpad`;
+  it honours the same guard. Restoring the old bundle restores its ad-hoc signature,
+  so its Bluetooth permission comes back with it.
+- **Version stamp.** `scripts/build-version.sh`: short sha of HEAD, `-dirty` only for
+  tracked changes or untracked `.go` files (not `git describe --dirty`, which reads a
+  stale index and stamped a clean tree dirty).
+
 The LaunchAgent label is `com.jkrumm.walkingpad`, installed at
 `~/Library/LaunchAgents/com.jkrumm.walkingpad.plist` (first run only; later runs
 just kickstart it). The previous separate `build` / `build-app` / `install` /
@@ -67,8 +82,9 @@ gone — they all folded into `make up`, and `deploy` is that same ship half.
 ## Verify & Monitor
 
 - **Health URL:** `http://127.0.0.1:7706/health` (loopback only, unauthenticated)
-  → `{"ok":true,"version":"…"}`. `make verify` probes it and exits non-zero if
-  the daemon is not live.
+  → `{"ok":true,"version":"<short sha>"}`. `make verify` probes it and exits non-zero if
+  the daemon is not live; `make version` prints the live `version` (the Watch compares
+  it with the deployed commit; exit 1 when `/health` does not answer).
 - **Logs:** `~/Library/Logs/walkingpad.log` and `walkingpad.err`; `make logs`
   prints a bounded tail of both (no `-f`). `/tmp/walkingpad.log` is stale — the
   installer moved stdio to `~/Library/Logs` because macOS's periodic `/tmp`
