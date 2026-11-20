@@ -6,8 +6,9 @@
 # anything but stopped or standby (active, starting, stopping, unknown).
 # A pad that is not connected carries no belt_state; if a session is still open
 # then (the link dropped mid-walk), that refuses too.
-# Fails open, loudly: /status unanswered, or answered 401/403 because the daemon
-# has an http_token and KSWP_HTTP_TOKEN is not exported here, proceeds with a note.
+# Fails open: an unanswered /status proceeds; any non-2xx answer (401/403 when the
+# daemon has an http_token and KSWP_HTTP_TOKEN is not exported here) proceeds with
+# a warning that the belt state was not checked.
 #
 # Usage:  FORCE=1 scripts/deploy-guard.sh [<status-url>]
 # Reads only. Sends nothing to the belt.
