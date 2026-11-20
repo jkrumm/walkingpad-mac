@@ -114,6 +114,7 @@ rollback: ## reinstall the bundle the last deploy replaced and restart the Launc
 
 test: ## run all tests (Go race + Raycast typecheck)
 	./scripts/test-deploy-guard.sh
+	./scripts/test-build-app-bundle.sh
 	go test -race -count=1 ./...
 	cd raycast && npx tsc --noEmit
 

@@ -60,6 +60,14 @@ with no Raycast dev loop and no commands sent to the belt.
 - **Rollback.** `make deploy` keeps the bundle it replaces in
   `~/.local/state/walkingpad/rollback/`; `make rollback` reinstalls it. The old bundle
   keeps its signature, so its Bluetooth permission returns with it.
+- **Signing.** `scripts/build-app-bundle.sh` signs with the team's Developer ID Application
+  identity when the keychain search list holds one (the mini unlocks `iris-signing.keychain-db` from
+  its password file, dotfiles `docs/apple-signing.md`), else ad-hoc with a warning. macOS keeps the
+  Bluetooth grant against the designated requirement: Developer ID's is the bundle id plus the team,
+  identical on every build; ad-hoc's is the cdhash, so each rebuild re-prompts on the mini display and
+  BLE times out until someone clicks Allow. `SIGN_IDENTITY=-` forces ad-hoc. No hardened runtime, no
+  notarisation (local build, never quarantined). Test: `scripts/test-build-app-bundle.sh`. The first
+  deploy that switches from ad-hoc to Developer ID prompts once.
 - **Version.** `scripts/build-version.sh` stamps the sha; the why is in its header.
 
 The LaunchAgent label is `com.jkrumm.walkingpad`, installed at

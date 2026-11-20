@@ -252,7 +252,7 @@ CoreBluetooth on macOS 11+ requires the calling process to be a bundled `.app` w
 
 - `make install` builds `WalkingPad.app` via `scripts/build-app-bundle.sh`, copies it to `/Applications/`, and writes a LaunchAgent plist that invokes `/Applications/WalkingPad.app/Contents/MacOS/walkingpad`.
 - First launch triggers the macOS Bluetooth-permission prompt. User must accept once.
-- The `.app` is unsigned in v1 (Gatekeeper requires user to right-click → Open the first time). Code-signing/notarisation is a v2 polish item.
+- The `.app` is signed with Developer ID when the build machine has the certificate, ad-hoc otherwise (`AGENTS.md` Deploy → Signing); it is not notarised.
 
 ### Plist template (`Info.plist.tmpl`)
 

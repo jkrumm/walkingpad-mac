@@ -8,8 +8,8 @@
 # NSBluetoothAlwaysUsageDescription + NSBluetoothPeripheralUsageDescription
 # strings. See PRD §12.
 #
-# The bundle is unsigned in v1 (Gatekeeper requires right-click → Open the first
-# time; users are walked through this in the README).
+# The bundle is signed with the Developer ID identity when the machine has one, ad-hoc
+# otherwise (see the signing block below for why the difference matters to Bluetooth).
 
 set -euo pipefail
 
@@ -61,17 +61,72 @@ install -m 0755 "$BINARY" "$APP_DIR/MacOS/$BINARY_BASENAME"
 # the exit code — if there are no xattrs there is nothing to strip.
 xattr -cr "$APP_PATH" 2>/dev/null || true
 
-# Ad-hoc sign the bundle. macOS Sequoia+ TCC matches Bluetooth permission against
-# the bundle's signature; an unsigned bundle's identity is fragile (rotates on
-# every cp -R) and TCC will silently deny scans even when the toggle is on in
-# System Settings. Ad-hoc signature (--sign -) is enough to give the bundle a
-# stable Designated Requirement on this machine; proper notarisation is a v2 item.
-if ! codesign --force --deep --sign - "$APP_PATH" 2>/tmp/codesign.err; then
-  echo "codesign failed (continuing — Bluetooth permission may not stick):" >&2
-  cat /tmp/codesign.err >&2
+# Sign the bundle. macOS TCC keeps the Bluetooth grant against the bundle's
+# designated requirement. An ad-hoc signature (--sign -) has the cdhash as its
+# requirement, which changes on every rebuild: tccd logs "Failed to match existing
+# code requirement ... kTCCServiceBluetoothAlways", prompts on the mini display and the
+# daemon cannot start BLE until someone clicks Allow. A Developer ID signature has a
+# requirement built from the bundle id and the team, identical across builds, so the
+# grant survives a deploy.
+#
+#   SIGN_IDENTITY unset  the team's "Developer ID Application" certificate when the
+#                        keychain search list holds one, else ad-hoc with a warning
+#   SIGN_IDENTITY=-      ad-hoc (CI, machines without the certificate)
+#   SIGN_IDENTITY=<id>   that identity (SHA-1 or name); failure is fatal
+#
+# No hardened runtime and no notarisation: the bundle is built and installed on the
+# same machine, never quarantined, and the runtime would need the Bluetooth entitlement.
+# The mini keeps the identity in a dedicated keychain that a reboot leaves locked; it is
+# unlocked from a 0600 password file outside the repo when both exist (dotfiles
+# docs/apple-signing.md, "Developer ID in a dedicated keychain").
+SIGNING_KEYCHAIN=${SIGNING_KEYCHAIN:-$HOME/Library/Keychains/iris-signing.keychain-db}
+SIGNING_KEYCHAIN_PASS_FILE=${SIGNING_KEYCHAIN_PASS_FILE:-$HOME/.local/state/apple-developer/signing-keychain.pass}
+
+unlock_signing_keychain() {
+  [[ -r "$SIGNING_KEYCHAIN_PASS_FILE" && -e "$SIGNING_KEYCHAIN" ]] || return 0
+  security unlock-keychain -p "$(cat "$SIGNING_KEYCHAIN_PASS_FILE")" "$SIGNING_KEYCHAIN" 2>/dev/null ||
+    echo "warning: could not unlock $SIGNING_KEYCHAIN" >&2
+}
+
+# Prints the SHA-1 of the first "Developer ID Application" identity (team-filtered when
+# APPLE_TEAM_ID is set), nothing when there is none.
+find_developer_id() {
+  unlock_signing_keychain
+  security find-identity -v -p codesigning 2>/dev/null |
+    awk -v team="(${APPLE_TEAM_ID:-})" '/Developer ID Application:/ && (team == "()" || index($0, team)) { print $2; exit }'
+}
+
+sign_adhoc() {
+  codesign --force --deep --sign - "$APP_PATH"
+}
+
+sign_identity() {
+  codesign --force --sign "$1" "$APP_PATH"
+}
+
+SIGN_IDENTITY=${SIGN_IDENTITY:-}
+if [[ "$SIGN_IDENTITY" == "-" ]]; then
+  SIGN_MODE=ad-hoc
+  sign_adhoc
+elif [[ -n "$SIGN_IDENTITY" ]]; then
+  SIGN_MODE=identity
+  sign_identity "$SIGN_IDENTITY"
+else
+  SIGN_ID=$(find_developer_id)
+  if [[ -n "$SIGN_ID" ]] && sign_identity "$SIGN_ID"; then
+    SIGN_MODE=developer-id
+  else
+    echo "warning: no usable Developer ID Application identity; signing ad-hoc." >&2
+    echo "warning: every rebuild now gets a new code requirement and macOS asks for Bluetooth again." >&2
+    SIGN_MODE=ad-hoc
+    sign_adhoc
+  fi
 fi
+codesign --verify --strict "$APP_PATH"
+SIGN_REQUIREMENT=$(codesign -d -r- "$APP_PATH" 2>&1 | sed -n 's/^#* *designated => //p')
 
 # Touch the bundle so Launch Services notices the change next time it's opened.
 touch "$APP_PATH"
 
-echo "wrote $APP_PATH (v$VERSION)"
+echo "wrote $APP_PATH (v$VERSION, signed: $SIGN_MODE)"
+echo "designated requirement: $SIGN_REQUIREMENT"
