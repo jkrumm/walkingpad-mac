@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Wrap a compiled king-smith-walkingpad-mac binary into a macOS .app bundle.
+# Wrap a compiled walkingpad-mac binary into a macOS .app bundle.
 #
 # Usage:  scripts/build-app-bundle.sh <binary-path> <version> <output-app-path>
 #

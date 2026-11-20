@@ -279,7 +279,7 @@ CoreBluetooth on macOS 11+ requires the calling process to be a bundled `.app` w
 <dict>
   <key>CFBundleIdentifier</key>          <string>com.jkrumm.walkingpad</string>
   <key>CFBundleName</key>                <string>King-Smith-WalkingPad-Mac</string>
-  <key>CFBundleExecutable</key>          <string>king-smith-walkingpad-mac</string>
+  <key>CFBundleExecutable</key>          <string>walkingpad</string>
   <key>CFBundleVersion</key>             <string>__VERSION__</string>
   <key>CFBundleShortVersionString</key>  <string>__VERSION__</string>
   <key>LSUIElement</key>                 <true/>   <!-- background-only, no Dock icon -->

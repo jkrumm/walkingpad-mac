@@ -1,10 +1,9 @@
-# king-smith-walkingpad-mac — single-target dev loop.
+# walkingpad-mac — single-target dev loop.
 # Run `make` for the menu, `make up` for everything else.
 
-REPO          := king-smith-walkingpad-mac
 BINARY        := walkingpad
 APP_NAME      := WalkingPad
-CMD_DIR       := ./cmd/$(REPO)
+CMD_DIR       := ./cmd/walkingpad
 BIN_DIR       := ./bin
 APP_BUNDLE    := $(BIN_DIR)/$(APP_NAME).app
 APP_INSTALL   := /Applications/$(APP_NAME).app

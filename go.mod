@@ -1,4 +1,4 @@
-module github.com/jkrumm/king-smith-walkingpad-mac
+module github.com/jkrumm/walkingpad-mac
 
 go 1.26.3
 

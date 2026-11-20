@@ -1,4 +1,4 @@
-# Lefthook config for king-smith-walkingpad-mac.
+# Lefthook config for walkingpad-mac.
 # Install once per clone: `brew install lefthook && lefthook install`.
 # Bypass in emergencies with `git commit --no-verify` (don't make a habit of it).
 

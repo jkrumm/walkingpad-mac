@@ -7,8 +7,8 @@ import (
 	"math"
 	"time"
 
-	"github.com/jkrumm/king-smith-walkingpad-mac/internal/api"
-	"github.com/jkrumm/king-smith-walkingpad-mac/internal/ble"
+	"github.com/jkrumm/walkingpad-mac/internal/api"
+	"github.com/jkrumm/walkingpad-mac/internal/ble"
 )
 
 // linkSender is the subset of *ble.Link the controller needs. Lets tests

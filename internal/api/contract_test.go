@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jkrumm/king-smith-walkingpad-mac/internal/ble"
-	"github.com/jkrumm/king-smith-walkingpad-mac/internal/store"
+	"github.com/jkrumm/walkingpad-mac/internal/ble"
+	"github.com/jkrumm/walkingpad-mac/internal/store"
 )
 
 // The golden contract: every response shape the app decodes is written to

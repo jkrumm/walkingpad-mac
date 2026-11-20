@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jkrumm/king-smith-walkingpad-mac/internal/config"
+	"github.com/jkrumm/walkingpad-mac/internal/config"
 )
 
 func TestNewWithPath_WritesBothSinks(t *testing.T) {

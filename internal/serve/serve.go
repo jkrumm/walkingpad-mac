@@ -28,12 +28,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jkrumm/king-smith-walkingpad-mac/internal/api"
-	"github.com/jkrumm/king-smith-walkingpad-mac/internal/ble"
-	"github.com/jkrumm/king-smith-walkingpad-mac/internal/config"
-	"github.com/jkrumm/king-smith-walkingpad-mac/internal/session"
-	"github.com/jkrumm/king-smith-walkingpad-mac/internal/store"
-	syncpkg "github.com/jkrumm/king-smith-walkingpad-mac/internal/sync"
+	"github.com/jkrumm/walkingpad-mac/internal/api"
+	"github.com/jkrumm/walkingpad-mac/internal/ble"
+	"github.com/jkrumm/walkingpad-mac/internal/config"
+	"github.com/jkrumm/walkingpad-mac/internal/session"
+	"github.com/jkrumm/walkingpad-mac/internal/store"
+	syncpkg "github.com/jkrumm/walkingpad-mac/internal/sync"
 )
 
 // tickInterval is how often the manager re-evaluates the idle-gap close.
@@ -170,13 +170,13 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger, version strin
 		syncWorker = syncpkg.NewWorker(syncpkg.Config{
 			BaseURL:   cfg.Argo.URL,
 			Token:     cfg.Argo.Token,
-			UserAgent: "king-smith-walkingpad-mac/" + version,
+			UserAgent: "walkingpad-mac/" + version,
 		}, st, log)
 		syncer = syncWorker
 		liveWorker = syncpkg.NewLiveWorker(syncpkg.LiveConfig{
 			BaseURL:   cfg.Argo.URL,
 			Token:     cfg.Argo.Token,
-			UserAgent: "king-smith-walkingpad-mac/" + version,
+			UserAgent: "walkingpad-mac/" + version,
 		}, mgr, log)
 	} else {
 		log.Info("sync.disabled", "reason", "no argo.token set")

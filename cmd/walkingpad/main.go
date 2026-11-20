@@ -4,8 +4,8 @@
 // KingSmith WalkingPad, persists session data to a local SQLite store, and
 // exposes a localhost HTTP API for the Raycast extension and other clients.
 //
-// The binary is named `walkingpad`; the repo and Go module keep
-// `king-smith-walkingpad-mac` for SEO. See PRD.md for the full design.
+// The binary is named `walkingpad`; the repo and Go module are `walkingpad-mac`.
+// See PRD.md for the full design.
 package main
 
 import (
@@ -23,10 +23,10 @@ import (
 
 	"github.com/BurntSushi/toml"
 
-	"github.com/jkrumm/king-smith-walkingpad-mac/internal/ble"
-	"github.com/jkrumm/king-smith-walkingpad-mac/internal/config"
-	"github.com/jkrumm/king-smith-walkingpad-mac/internal/logger"
-	"github.com/jkrumm/king-smith-walkingpad-mac/internal/serve"
+	"github.com/jkrumm/walkingpad-mac/internal/ble"
+	"github.com/jkrumm/walkingpad-mac/internal/config"
+	"github.com/jkrumm/walkingpad-mac/internal/logger"
+	"github.com/jkrumm/walkingpad-mac/internal/serve"
 )
 
 // Version is injected at build time via -ldflags.

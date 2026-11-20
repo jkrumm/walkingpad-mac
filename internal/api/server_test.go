@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jkrumm/king-smith-walkingpad-mac/internal/ble"
-	"github.com/jkrumm/king-smith-walkingpad-mac/internal/session"
-	"github.com/jkrumm/king-smith-walkingpad-mac/internal/store"
+	"github.com/jkrumm/walkingpad-mac/internal/ble"
+	"github.com/jkrumm/walkingpad-mac/internal/session"
+	"github.com/jkrumm/walkingpad-mac/internal/store"
 )
 
 // --- fakes ------------------------------------------------------------------

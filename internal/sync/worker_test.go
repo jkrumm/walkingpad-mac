@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jkrumm/king-smith-walkingpad-mac/internal/store"
+	"github.com/jkrumm/walkingpad-mac/internal/store"
 )
 
 // --- fakeStore --------------------------------------------------------------

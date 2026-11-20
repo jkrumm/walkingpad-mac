@@ -15,8 +15,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/jkrumm/king-smith-walkingpad-mac/internal/session"
-	"github.com/jkrumm/king-smith-walkingpad-mac/internal/store"
+	"github.com/jkrumm/walkingpad-mac/internal/session"
+	"github.com/jkrumm/walkingpad-mac/internal/store"
 )
 
 // Errors returned across handler / port boundaries.

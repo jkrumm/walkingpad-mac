@@ -1,4 +1,6 @@
-# king-smith-walkingpad-mac
+# walkingpad-mac
+
+_Formerly `king-smith-walkingpad-mac` (renamed 2026-11-20)._
 
 A macOS daemon and Raycast extension for the KingSmith **WalkingPad P1**. Control the belt, track every session, own your data.
 
@@ -24,7 +26,7 @@ Explicit non-goals: no Garmin upload (Garmin Connect can't update the watch's da
 - Smart session grouping: pauses up to 15 minutes (coffee, bathroom) stay in the same session; longer gaps start a new one.
 - Live telemetry at ~1 Hz: speed, distance, steps, belt state.
 - Calorie computation client-side using a MET formula (configurable body weight).
-- Local SQLite store at `~/Library/Application Support/king-smith-walkingpad-mac/db.sqlite`.
+- Local SQLite store at `~/Library/Application Support/WalkingPad/db.sqlite`.
 - Loopback HTTP API on `127.0.0.1:7706`.
 - Raycast extension: menu bar + commands for start/stop/speed/history.
 - Optional sync to a personal API (Argo).
@@ -51,8 +53,8 @@ pad from the mini; the API binds loopback only and is not reachable from another
 ## Install
 
 ```bash
-git clone https://github.com/jkrumm/king-smith-walkingpad-mac.git
-cd king-smith-walkingpad-mac
+git clone https://github.com/jkrumm/walkingpad-mac.git
+cd walkingpad-mac
 make up
 ```
 
@@ -71,7 +73,7 @@ Re-run `make up` after every code change. It's the only command you need for the
 
 ## Configuration
 
-Edit `~/Library/Application Support/king-smith-walkingpad-mac/config.toml`:
+Edit `~/Library/Application Support/WalkingPad/config.toml`:
 
 ```toml
 [device]
@@ -114,10 +116,10 @@ make up
 ### From the CLI (development & debugging)
 
 ```bash
-./bin/king-smith-walkingpad-mac scan          # list nearby WalkingPad devices
-./bin/king-smith-walkingpad-mac connect       # connect, stream live frames, exit on Ctrl-C
-./bin/king-smith-walkingpad-mac status        # query running daemon's status
-./bin/king-smith-walkingpad-mac serve         # foreground daemon (what the LaunchAgent runs)
+./bin/walkingpad scan          # list nearby WalkingPad devices
+./bin/walkingpad connect       # connect, stream live frames, exit on Ctrl-C
+./bin/walkingpad status        # query running daemon's status
+./bin/walkingpad serve         # foreground daemon (what the LaunchAgent runs)
 ```
 
 ### From the HTTP API
@@ -167,7 +169,7 @@ make test       # go test -race + raycast tsc --noEmit
 make check-fast # Go, Raycast and Swift lint + tests, no Xcode build
 make check      # check-fast + the Xcode build of the Swift app (what CI runs)
 make contracts  # rewrite contracts/fixtures after an intended API change
-make logs       # tail /tmp/walkingpad.log
+make logs       # tail ~/Library/Logs/walkingpad.log
 make lint       # golangci-lint
 make fmt        # gofmt + go mod tidy + swift format
 make scan       # BLE device discovery (dev tool)

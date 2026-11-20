@@ -19,7 +19,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/jkrumm/king-smith-walkingpad-mac/internal/config"
+	"github.com/jkrumm/walkingpad-mac/internal/config"
 )
 
 // New builds the logger configured by cfg. The returned io.Closer flushes and

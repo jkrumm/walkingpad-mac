@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jkrumm/king-smith-walkingpad-mac/internal/store"
+	"github.com/jkrumm/walkingpad-mac/internal/store"
 )
 
 // Defaults intentionally favour low traffic over snappy uploads: closed
@@ -46,7 +46,7 @@ type Config struct {
 	// BatchSize caps how many sessions one tick will try to upload. Default 25.
 	BatchSize int
 	// UserAgent identifies the daemon in argo's request logs. Default
-	// "king-smith-walkingpad-mac".
+	// "walkingpad-mac".
 	UserAgent string
 	// HTTPClient lets tests inject a stubbed transport. Default has a 10 s
 	// per-request timeout.
@@ -61,7 +61,7 @@ func (c *Config) withDefaults() {
 		c.BatchSize = defaultBatchSize
 	}
 	if c.UserAgent == "" {
-		c.UserAgent = "king-smith-walkingpad-mac"
+		c.UserAgent = "walkingpad-mac"
 	}
 	if c.HTTPClient == nil {
 		c.HTTPClient = &http.Client{Timeout: defaultHTTPTimeout}

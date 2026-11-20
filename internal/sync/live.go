@@ -23,7 +23,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jkrumm/king-smith-walkingpad-mac/internal/session"
+	"github.com/jkrumm/walkingpad-mac/internal/session"
 )
 
 const (
@@ -46,7 +46,7 @@ func (c *LiveConfig) withDefaults() {
 		c.PushInterval = defaultLivePushInterval
 	}
 	if c.UserAgent == "" {
-		c.UserAgent = "king-smith-walkingpad-mac"
+		c.UserAgent = "walkingpad-mac"
 	}
 	if c.HTTPClient == nil {
 		c.HTTPClient = &http.Client{Timeout: defaultLiveHTTPTimeout}

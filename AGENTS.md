@@ -1,8 +1,7 @@
 # AGENTS.md — walkingpad-mac
 
-> **Naming.** The repo is `walkingpad-mac` (renamed from `king-smith-walkingpad-mac`
-> on 2026-11-20; the Go module path and `cmd/king-smith-walkingpad-mac/` follow in
-> plan row `rename-sweep`). Everything user-facing is `WalkingPad` (display) /
+> **Naming.** The repo and Go module are `walkingpad-mac`; the entrypoint is
+> `cmd/walkingpad/`. Everything user-facing is `WalkingPad` (display) /
 > `walkingpad` (CLI binary, identifier, log paths). The compiled output is
 > `bin/walkingpad`, installed to `/Applications/WalkingPad.app/Contents/MacOS/walkingpad`.
 >
@@ -96,7 +95,7 @@ counter and set-speed gotchas fail silently and live there.
 ## Layout
 
 ```
-cmd/king-smith-walkingpad-mac/main.go    # CLI entrypoint; compiled to `walkingpad`
+cmd/walkingpad/main.go                  # CLI entrypoint; compiled to `walkingpad`
 internal/                                # the Go host: ble, session, store, api, sync, config, logger
 raycast/                                 # TypeScript Raycast extension
 scripts/                                 # plist, Info.plist.tmpl, build-app-bundle.sh, tools.sh, apple-slot.sh

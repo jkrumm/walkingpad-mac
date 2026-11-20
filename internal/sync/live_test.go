@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jkrumm/king-smith-walkingpad-mac/internal/session"
+	"github.com/jkrumm/walkingpad-mac/internal/session"
 )
 
 // --- fakeManager -----------------------------------------------------------

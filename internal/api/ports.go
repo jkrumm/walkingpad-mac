@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/jkrumm/king-smith-walkingpad-mac/internal/ble"
+	"github.com/jkrumm/walkingpad-mac/internal/ble"
 )
 
 // Controller is the BLE write surface the API exposes. Step 6 wires a real
