@@ -30,13 +30,14 @@ trap 'rm -f "$TMP"' EXIT
 code=$("$CURL" -sS --max-time 3 ${auth[@]+"${auth[@]}"} -o "$TMP" -w '%{http_code}' "$URL" 2>/dev/null) || code=""
 
 case "$code" in
-  "" | 5??)
+  2?? | 000) ;; # 000: a file:// URL in the test; parse the body below
+  "")
     echo "deploy guard: /status does not answer, proceeding"
     exit 0
     ;;
-  401 | 403)
-    echo "deploy guard: WARNING — /status answered $code (http_token set?); belt state NOT checked." >&2
-    echo "deploy guard: export KSWP_HTTP_TOKEN to enable the check. Proceeding." >&2
+  *)
+    echo "deploy guard: WARNING — /status answered $code; belt state NOT checked. Proceeding." >&2
+    [[ $code == 401 || $code == 403 ]] && echo "deploy guard: http_token set? export KSWP_HTTP_TOKEN to enable the check." >&2
     exit 0
     ;;
 esac

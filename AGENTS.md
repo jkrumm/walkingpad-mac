@@ -26,7 +26,7 @@ for agents.
 | Layer | Choice | Why |
 |-|-|-|
 | Daemon language | **Go 1.26+** | Single binary, easy LaunchAgent, native macOS Bluetooth via cgo |
-| BLE library | **`tinygo.org/x/bluetooth` v0.16.0** | Only cross-platform Go BLE lib; P1 verified by tim-oster on v0.10.0 |
+| BLE library | **`tinygo.org/x/bluetooth` v0.16.0** | Only cross-platform Go BLE lib; P1 verified on v0.10.0, not yet on v0.16.0 |
 | SQLite driver | **`modernc.org/sqlite`** | Pure Go (no CGO) — keeps cross-compile easy |
 | HTTP | **stdlib `net/http`** | Loopback only, no framework needed |
 | Logging | **`log/slog`** → JSONL on disk + pretty on stderr | Standard library, structured |
@@ -59,9 +59,9 @@ just the ship/restart half — build, install the `.app`, kickstart the agent �
 with no Raycast dev loop and no commands sent to the belt.
 
 - **Guard.** `make deploy`/`rollback` read `GET /status` first and refuse unless
-  `belt_state` is `stopped`/`standby` (or the pad dropped with a session open): a
-  restart cuts the walk. `FORCE=1` overrides. No answer proceeds; a 401 (`http_token`)
-  proceeds with a warning unless `KSWP_HTTP_TOKEN` is exported. Test: `scripts/test-deploy-guard.sh`.
+  `belt_state` is `stopped`/`standby`, and when the pad dropped with a session open: a
+  restart cuts the walk. `FORCE=1` overrides. No answer proceeds; any non-2xx (401 with an
+  `http_token`: export `KSWP_HTTP_TOKEN`) proceeds with a warning. Test: `scripts/test-deploy-guard.sh`.
 - **Rollback.** `make deploy` keeps the bundle it replaces in
   `~/.local/state/walkingpad/rollback/`; `make rollback` reinstalls it. The old bundle
   keeps its signature, so its Bluetooth permission returns with it.
