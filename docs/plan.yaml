@@ -1,0 +1,142 @@
+# The plan: work not yet filed, as rows (format: `factory plan schema`). Design: docs/spec.md.
+version: 1
+rows:
+  - key: host-deploy-head
+    kind: chore
+    title: Deploy master to the mini with a rollback, add make version and a mid-session deploy guard
+    facts:
+      why: |-
+        The live host daemon on the mini is build cd86289 from 2026-05-21 (GET /health says "cd86289-dirty"). Master has 12 later commits that were never deployed, among them the bump of tinygo.org/x/bluetooth from v0.10.0 to v0.16.0 and of modernc.org/sqlite. The repo joined the factory on 2026-11-20 with deploy.mode make (project.yaml), so every later host row runs `make deploy`, and the factory's Watch reads `make version`, which does not exist. The first deploy of the untested BLE library therefore needs a rollback at hand, and a deploy must never cut a walking session.
+      what: |-
+        Makefile (deploy, verify, new version and rollback targets), scripts/ (install and bundle scripts), AGENTS.md (sections Deploy and Verify & Monitor). No Go source change unless the deployed build fails on the hardware.
+      change: |-
+        1. `make version`: print the sha of the live daemon. Read `factory project schema` for what the Watch expects of it before choosing the output. The build must stamp a clean sha when the tree is clean (find out why the live build says -dirty and fix the cause).
+        2. Deploy guard in `make deploy`: before the LaunchAgent restart read GET http://127.0.0.1:7706/status. When belt_state is anything but stopped or standby, refuse and name the state; FORCE=1 overrides. When /status does not answer, proceed (the guard fails open).
+        3. Rollback: before swapping /Applications/WalkingPad.app keep one copy of the bundle being replaced under ~/.local/state/walkingpad/rollback/. `make rollback` reinstalls it and kickstarts com.jkrumm.walkingpad.
+        4. Deploy master and prove it on the hardware, reading only: within 120 s GET /status says "connected": true and observed_at advances between two reads 5 s apart. The pad answered in standby under the old build on 2026-11-20. Send no /start, /stop, /speed or /pref request: the belt is a physical machine.
+        5. If the new build does not connect: read ~/Library/Logs/walkingpad.err. A Bluetooth permission denial after the rebuild needs a click on the mini's screen, which is the owner's: raise it with the exact System Settings path. If the old build connects and the new one does not, run `make rollback`, leave master as it is and report the regression as its own signal (`factory signal file`) with the log lines.
+        6. Update AGENTS.md in the same commit: Deploy (guard, rollback), Verify & Monitor (make version), and the Stack table row that still names bluetooth v0.10.0.
+      acceptance: |-
+        GET /health on the mini returns the short sha of the deployed commit without -dirty and `make version` prints the same sha; GET /status says connected true with observed_at advancing; a test of the deploy guard (a stubbed status answer with an active belt state) shows the refusal and the FORCE=1 override, and an unreachable status proceeds; ~/.local/state/walkingpad/rollback/ holds the replaced bundle; `make check` passes.
+
+  - key: rename-sweep
+    kind: chore
+    after: [host-deploy-head]
+    seat: { tier: sonnet, effort: medium }
+    title: Follow the repo rename to walkingpad-mac in the Go module, cmd directory and docs
+    facts:
+      why: |-
+        The repo was renamed from king-smith-walkingpad-mac to walkingpad-mac on 2026-11-20 (GitHub redirects the old URL; the checkout is ~/SourceRoot/walkingpad-mac). The Go module path, the cmd directory, the Makefile, lefthook.yml, README.md, AGENTS.md and docs/protocol.md still carry the old name.
+      what: |-
+        go.mod and every import, cmd/king-smith-walkingpad-mac (becomes cmd/walkingpad), Makefile, lefthook.yml, scripts/, README.md, AGENTS.md, docs/protocol.md. Not raycast/, not the env prefix KSWP_ (the live LaunchAgent plist exports it), not the data directory ~/Library/Application Support/WalkingPad, not the bundle id com.jkrumm.walkingpad.
+      change: |-
+        1. Module path github.com/jkrumm/walkingpad-mac; rewrite the imports; move cmd/king-smith-walkingpad-mac to cmd/walkingpad; the binary stays bin/walkingpad.
+        2. README.md: title, clone URL, CLI examples (they name ./bin/king-smith-walkingpad-mac), the data path (it names a king-smith-walkingpad-mac directory; the code uses WalkingPad), the log path (README says /tmp, the logs are in ~/Library/Logs). Keep one line that names the former repo name. "KingSmith" as the manufacturer's name stays wherever it describes the hardware.
+        3. AGENTS.md: rewrite the Naming box (no SEO reasoning; repo and module are walkingpad-mac), fix the Layout block, delete the orphan sentence "Full per-file responsibilities in the Layout table above; nothing else moved.".
+      acceptance: |-
+        `rg 'king-smith-walkingpad-mac' --glob '!go.sum'` prints exactly one line, the README's note on the former name; `go build ./...` and `make check` pass; after `make deploy`, `make verify` passes and GET /status says connected true.
+
+  - key: host-remote-api
+    after: [rename-sweep]
+    title: Add a token-guarded remote listener to the host API
+    facts:
+      why: |-
+        The API binds 127.0.0.1:7706 on the mini and the owner sits at the MacBook, so nothing he uses can reach it. The Swift app (docs/spec.md) and launcher commands will reach the host through a tailnet door on the mini. POST /start moves a physical belt, so the remote path needs a bearer token on every request. The loopback consumers must keep working without one: the mini's Kuma door probes GET /status on 7706, and `walkingpad status` reads it.
+      what: |-
+        internal/config, internal/api, internal/serve, cmd/walkingpad, their tests, docs/protocol.md section 8, README.md (Configuration), AGENTS.md. No BLE, session or store change.
+      change: |-
+        Today [daemon] http_token (env KSWP_HTTP_TOKEN) guards every route except /health on the one listener; with it set the Kuma probe would get 401. Keep that listener and its behaviour as they are and add a second one:
+        1. [daemon] remote_port (default 0, off). The remote listener binds 127.0.0.1 (the mini's Caddy door terminates TLS and forwards to it), serves the same routes, and answers 401 to any request without the right bearer token, /health included or not as you judge; say which in docs/protocol.md.
+        2. The remote token: when remote_port is set and no token is configured, create 32 random bytes as hex in <data dir>/remote-token with mode 0600 on first start and reuse it afterwards. `walkingpad token` prints it. The token never goes to a log line.
+        3. Compare the token in constant time.
+        4. Enable it on the mini: pick a free port by the mini's registry rules (dotfiles skill mini-service, ~/SourceRoot/dotfiles/config/mini/services.yaml), set it in the live config, deploy. State the port in the ship note: the dotfiles row `door` reads it there.
+      acceptance: |-
+        Table-driven tests show: the remote listener answers 401 without a token and with a wrong one and 200 with the right one on GET /status and POST /stop (against the fake controller); the loopback listener behaves as before with and without http_token; with remote_port 0 no second listener starts. On the mini `curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:<remote_port>/status` prints 401, with the header 200, and GET http://127.0.0.1:7706/status still prints 200 without a header; `make check` passes.
+
+  - key: door
+    repo: dotfiles
+    after: [host-remote-api]
+    title: Tailnet door for the WalkingPad host API
+    facts:
+      why: |-
+        walkingpad-mac's host daemon on the mini now serves a token-guarded remote listener on loopback (plan row host-remote-api of walkingpad-mac; its ship note names the port). The owner's MacBook app must reach it over the tailnet with TLS, like every other dev app's door on the mini.
+      what: |-
+        The door registry and Caddy configuration this repo already uses for a mini app door, config/mini/services.yaml (the new port), docs/architecture.md. Not kuma-door/registry.json: the Kuma probe stays on the loopback port 7706.
+      change: |-
+        Add a door named walkingpad that forwards to the remote listener's port on 127.0.0.1, reachable from the owner's devices by the same tailnet ACL as the other doors. Register the port. Follow skill mini-service.
+      acceptance: |-
+        From the mini, GET https://<the new door>/status answers 401 without a token and 200 with the token `walkingpad token` prints; the door appears in the registry the other doors are in; `make verify` passes.
+
+  - key: app-skeleton
+    issue: 2594
+
+  - key: app-menubar
+    lane: apple
+    after: [app-skeleton]
+    seat: { tier: opus, effort: high }
+    title: Menu bar item, control popover, global hotkeys and settings
+    facts:
+      why: |-
+        The owner controls the belt from the MacBook and has had no control surface there since the Raycast extension stayed on the mini; his last session is from 2026-07-31. docs/spec.md is the design: a SwiftUI menu bar app that is a client of the host's HTTP API and owns no Bluetooth and no database.
+      what: |-
+        apple/ only (the app target and the local package app-skeleton created). No Go change. The API contract is docs/protocol.md section 8 and the golden files under contracts/.
+      change: |-
+        1. Host connection: base URL and bearer token from settings, the token in the Keychain. A store in the package polls GET /status every 1 s while a session is active or the popover is open and every 10 s otherwise, and maps the answers to one state: unconfigured, host unreachable, unauthorized, pad disconnected, standby, starting, active, stopping.
+        2. Menu bar item (MenuBarExtra, window style, LSUIElement): speed, elapsed time and distance while walking; today's distance when idle; a distinct symbol when the host is unreachable or the pad is disconnected.
+        3. Popover: the current speed large; one state-aware Start/Stop button (POST /start with the default start speed, POST /stop); a speed stepper in 0.5 km/h steps within 0.5 to 6.0 (POST /speed) and a few preset speeds; time, distance, steps and kcal of the session; today's totals. POST /start blocks 4 to 5 s on the host because it waits for the belt to reach ACTIVE before it sets the speed (AGENTS.md gotcha 10): show progress, disable the controls, use a request timeout of at least 15 s.
+        4. Global hotkeys for toggle, speed up and speed down, configurable, with the KeyboardShortcuts package pinned as ~/SourceRoot/iris/apple/project.yml pins it.
+        5. Settings as a Window scene (ntfy-mac avoids the Settings scene; ~/SourceRoot/ntfy-mac/AGENTS.md says why): host URL, token, default start speed (POST /pref/start-speed), launch at login through SMAppService.mainApp (reference ~/SourceRoot/ntfy-mac/Sources/NtfyPlatform/SMAppServiceLoginItem.swift), hotkeys.
+        6. An offscreen snapshot harness (`make snapshots`; reference: ntfy-mac's Makefile target and its AGENTS.md section "UI snapshots") that renders the popover and settings in each state against a stub host. Look at the PNGs yourself before shipping.
+        7. Look: native macOS 26 SwiftUI, system materials, SF Symbols, no custom chrome. raycast/src/controller.tsx and raycast/src/lib/charts.ts show which data the owner likes to see together (activity ring, sparkline).
+        Never send POST /start, /stop, /speed or /pref to the live host from a test or a proof: the belt is a physical machine and the owner does the first live start in row app-install. Reading GET /status and GET /sessions on http://127.0.0.1:7706 is fine.
+      acceptance: |-
+        Package tests cover the state mapping from fixture /status payloads (every belt_state, connected false, 401, a timeout) and the switch of the polling interval; snapshots exist for unconfigured, host unreachable, standby, active and stopping, in light and dark; the app started on the mini against http://127.0.0.1:7706 shows the live standby state and today's totals (a snapshot or log line proves it); `make check-fast` passes and CI is green on the pushed commit.
+
+  - key: app-history
+    lane: apple
+    after: [app-menubar]
+    title: History window with sessions, totals and charts
+    facts:
+      why: |-
+        Walking statistics are visible only in Argo today. The owner wants the same view in the app; the data is already in the host's SQLite and reachable through the API, so the app needs no Argo (docs/spec.md).
+      what: |-
+        apple/ (a History window and its package code); internal/api and internal/store with tests and docs/protocol.md section 8 where an aggregate is missing; contracts/ for any new response.
+      change: |-
+        1. A History window: sessions grouped by day (GET /sessions, paged), a detail view (GET /sessions/{uuid}), totals for the current week and month, and a bar chart of distance per day over the last 30 and 90 days with Swift Charts.
+        2. GET /summary accepts day, week and month only and returns one total. Add what the chart needs to the Go API (for example totals per day between two dates), with table-driven tests, a golden file under contracts/ and docs/protocol.md section 8, and deploy it.
+        3. Empty and error states: no sessions in the range, host unreachable.
+        The mini's database holds real sessions up to 2026-07-31; read them through GET on http://127.0.0.1:7706 to judge the look with real numbers. Send no belt command.
+      acceptance: |-
+        Go tests cover the new aggregate, including a day without sessions and a session that crosses midnight; the Swift client decodes its golden file; snapshots show the History window with fixture data and in the empty state; `make check` passes locally for the Go part, `make check-fast` passes and CI is green.
+
+  - key: app-install
+    lane: apple
+    after: [app-menubar, door]
+    title: Sign and notarize the app, install it on the MacBook, first live start by the owner
+    facts:
+      why: |-
+        The app exists but runs nowhere the owner sits. docs/spec.md sets the distribution: no public release pipeline, a Developer ID signed and notarized build that the MacBook pulls from the mini after the owner approves one dialog.
+      what: |-
+        scripts/ (signing, verification, install), Makefile, AGENTS.md. App source only for a defect the install finds; a larger defect is reported as its own signal.
+      change: |-
+        1. Read ~/SourceRoot/dotfiles/docs/apple-signing.md first (skill apple-signing). Copy and adapt from ~/SourceRoot/ntfy-mac/scripts: sign.sh, apple-credentials.sh, verify-signature.sh. Credentials come from `secrets-run read op://mini/apple-developer/<field>`; the team id goes into no tracked file and no log. Every xcodebuild and the notarization run through scripts/apple-slot.sh.
+        2. No portal step is expected: the app has no App Group, no Push and no sandbox, and the Developer ID Application certificate is on the mini (ntfy-mac releases with it). If a build names a missing capability, ask the owner with the click path from the reference; never strip an entitlement.
+        3. `make install-macbook`, copied from ~/SourceRoot/ntfy-mac/scripts/install-macbook.sh: one ask-human dialog, the MacBook rsyncs the bundle from the mini into ~/Applications/WalkingPad.app, verifies the signature, relaunches.
+        4. Hand over the connection in the same dialog or a second one: the door URL into the app's settings and the remote token (`walkingpad token` on the mini) into the MacBook's Keychain. The token must not appear in the dialog text, in argv, in a log or in a tracked file.
+        5. One ask to the owner with yes/no lines: the menu bar item shows the pad's state; Start in the popover starts the belt at the default speed; the speed hotkeys work; Stop ends the session and it shows in History and in Argo.
+      acceptance: |-
+        scripts/verify-signature.sh passes on the build (Developer ID authority, hardened runtime, stapled); on the MacBook `spctl --assess --type execute --verbose ~/Applications/WalkingPad.app` says Notarized Developer ID and the app's version is the built commit; the owner's four answers are recorded in the ship note; `make check-fast` passes.
+
+  - key: readme
+    kind: docs
+    after: [app-install]
+    title: Rewrite the README for the host plus app shape
+    facts:
+      why: |-
+        README.md describes a daemon plus Raycast extension that runs on the mini only. After app-install the product is a Go host on the machine next to the pad and a Swift menu bar app on the machine with a person at it.
+      what: |-
+        README.md, docs/images/ (screenshots from `make snapshots`), AGENTS.md where it contradicts the README. No code.
+      change: |-
+        Rewrite the README around the two parts: what each does, the diagram from docs/spec.md, install of the host (make deploy) and of the app, the remote listener and token, configuration, troubleshooting. Say plainly that this is a personal tool for the P1 over WiLink and name the alternatives a reader with another pad should look at (docs/spec.md lists what was found on 2026-11-20; check each link before citing it). Follow ~/SourceRoot/brain/voice.md and run the finished text through the prose skill.
+      acceptance: |-
+        Every command in the README runs as written on the mini; every link answers 200; the screenshots are the current snapshots; `make check` passes.
