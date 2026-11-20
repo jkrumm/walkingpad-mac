@@ -1,6 +1,7 @@
 package serve
 
 import (
+	"strings"
 	"sync"
 	"time"
 
@@ -20,6 +21,7 @@ type statusProvider struct {
 	connected bool
 	address   string
 	name      string
+	adapter   string // why the adapter is unusable; empty when it works
 }
 
 // newStatusProvider constructs an empty provider. name is the human-readable
@@ -51,6 +53,30 @@ func (s *statusProvider) markDisconnected() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.connected = false
+}
+
+// setAdapterState records whether the Bluetooth adapter is the reason the pad
+// is not connected. Called from the link's retry loop.
+func (s *statusProvider) setAdapterState(err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err == nil {
+		s.adapter = ""
+		return
+	}
+	s.adapter = adapterReason(err)
+}
+
+// AdapterError implements api.StatusProvider.
+func (s *statusProvider) AdapterError() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.adapter
+}
+
+// adapterReason is the CoreBluetooth cause without the package prefixes.
+func adapterReason(err error) string {
+	return strings.TrimPrefix(err.Error(), ble.ErrAdapterNotReady.Error()+": ")
 }
 
 // LastFrame implements api.StatusProvider.

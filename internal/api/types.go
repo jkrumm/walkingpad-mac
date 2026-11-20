@@ -55,6 +55,7 @@ type deviceJSON struct {
 
 type statusResponse struct {
 	Connected      bool                `json:"connected"`
+	AdapterError   string              `json:"adapter_error,omitempty"`
 	BeltState      string              `json:"belt_state,omitempty"`
 	Mode           string              `json:"mode,omitempty"`
 	SpeedKmh       float64             `json:"speed_kmh,omitempty"`

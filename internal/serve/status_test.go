@@ -1,6 +1,8 @@
 package serve
 
 import (
+	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -45,6 +47,21 @@ func TestStatusProvider_RoundTrip(t *testing.T) {
 	}
 	if frame.SpeedKmh != 4.5 {
 		t.Errorf("last frame should survive disconnect: %+v", frame)
+	}
+}
+
+func TestStatusProvider_AdapterState(t *testing.T) {
+	sp := &statusProvider{}
+	if got := sp.AdapterError(); got != "" {
+		t.Errorf("initial adapter error = %q", got)
+	}
+	sp.setAdapterState(fmt.Errorf("%w: %w", ble.ErrAdapterNotReady, errors.New("timeout enabling CentralManager")))
+	if got := sp.AdapterError(); got != "timeout enabling CentralManager" {
+		t.Errorf("adapter error = %q", got)
+	}
+	sp.setAdapterState(nil)
+	if got := sp.AdapterError(); got != "" {
+		t.Errorf("adapter error after recovery = %q", got)
 	}
 }
 

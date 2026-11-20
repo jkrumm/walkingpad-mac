@@ -31,6 +31,9 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		Connected: connected,
 		Device:    deviceJSON(dev),
 	}
+	if !connected {
+		resp.AdapterError = s.deps.Status.AdapterError()
+	}
 	if connected {
 		resp.BeltState = frame.State.String()
 		resp.Mode = frame.Mode.String()

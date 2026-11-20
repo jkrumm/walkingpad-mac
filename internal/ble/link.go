@@ -43,6 +43,10 @@ type LinkConfig struct {
 	// OnDisconnect fires when the watchdog (or an explicit teardown) drops the
 	// link. reason is nil for a clean shutdown.
 	OnDisconnect func(addr string, reason error)
+	// OnAdapterState fires after each resolve attempt that reached the adapter:
+	// err wraps ErrAdapterNotReady while Bluetooth is unavailable on the host,
+	// nil once it works. Optional.
+	OnAdapterState func(err error)
 }
 
 // LinkClient is the subset of *Client that Link needs. Exposed so tests can
@@ -142,6 +146,9 @@ func (l *Link) Run(ctx context.Context) error {
 
 		// Resolve which address to dial.
 		addr, err := l.resolveAddr(ctx)
+		if l.cfg.Address == "" { // a pinned address never touches the adapter before Dial
+			l.reportAdapter(err)
+		}
 		if err != nil {
 			attempt++
 			wait := Backoff(attempt)
@@ -154,6 +161,7 @@ func (l *Link) Run(ctx context.Context) error {
 
 		// Dial.
 		client, err := l.dialer.Dial(ctx, addr, l.onStatusInternal, l.cfg.OnError)
+		l.reportAdapter(err)
 		if err != nil {
 			attempt++
 			wait := Backoff(attempt)
@@ -205,6 +213,19 @@ func (l *Link) Run(ctx context.Context) error {
 			return nil
 		}
 	}
+}
+
+// reportAdapter forwards whether the last resolve or dial failed because the
+// adapter is not ready (err wraps ErrAdapterNotReady) or worked (nil). Other
+// errors say nothing about the adapter and leave the last state alone.
+func (l *Link) reportAdapter(err error) {
+	if l.cfg.OnAdapterState == nil {
+		return
+	}
+	if err != nil && !errors.Is(err, ErrAdapterNotReady) {
+		return
+	}
+	l.cfg.OnAdapterState(err)
 }
 
 // resolveAddr returns the address to dial. If cfg.Address is set, we use it

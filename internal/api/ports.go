@@ -29,6 +29,9 @@ type StatusProvider interface {
 	LastFrame() (frame ble.Status, observedAt time.Time, connected bool)
 	// DeviceInfo returns metadata about the bound peripheral, if any.
 	DeviceInfo() DeviceInfo
+	// AdapterError says why the host's Bluetooth adapter is unusable (off, not
+	// authorized, still powering on); empty when it works.
+	AdapterError() string
 }
 
 // DeviceInfo mirrors the per-device fields the /status JSON exposes.
@@ -70,6 +73,9 @@ func (NopStatus) LastFrame() (ble.Status, time.Time, bool) { return ble.Status{}
 
 // DeviceInfo implements StatusProvider.
 func (NopStatus) DeviceInfo() DeviceInfo { return DeviceInfo{} }
+
+// AdapterError implements StatusProvider.
+func (NopStatus) AdapterError() string { return "" }
 
 // NopSyncer reports "sync disabled" — handlers translate this to 503. Step 9
 // supplies the real Argo worker.

@@ -75,12 +75,14 @@ type fakeStatus struct {
 	observed  time.Time
 	connected bool
 	dev       DeviceInfo
+	adapter   string
 }
 
 func (f *fakeStatus) LastFrame() (ble.Status, time.Time, bool) {
 	return f.frame, f.observed, f.connected
 }
 func (f *fakeStatus) DeviceInfo() DeviceInfo { return f.dev }
+func (f *fakeStatus) AdapterError() string   { return f.adapter }
 
 type fakeSyncer struct {
 	synced, failed int
@@ -243,6 +245,29 @@ func TestStatus_DisconnectedShape(t *testing.T) {
 	}
 	if got.CurrentSession != nil {
 		t.Error("current_session should be nil")
+	}
+}
+
+func TestStatus_ReportsAdapterErrorWhileDisconnected(t *testing.T) {
+	r := newRig(t, "")
+	r.status.adapter = "bluetooth is not authorized for this app"
+	_, body := r.do(t, "GET", "/status", nil)
+	var got statusResponse
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("decode: %v body=%s", err, body)
+	}
+	if got.Connected || got.AdapterError != r.status.adapter {
+		t.Errorf("adapter_error = %q connected=%v", got.AdapterError, got.Connected)
+	}
+
+	r.status.connected = true
+	_, body = r.do(t, "GET", "/status", nil)
+	got = statusResponse{}
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.AdapterError != "" {
+		t.Errorf("adapter_error must be empty while connected, got %q", got.AdapterError)
 	}
 }
 

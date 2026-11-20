@@ -43,20 +43,44 @@ type Discovered struct {
 	NameMatch  bool // LocalName matched one of the known prefixes
 }
 
-// adapterOnce guards adapter Enable(); calling it twice on Darwin races the
-// CBCentralManager init.
-var (
-	adapterOnce sync.Once
-	adapterErr  error
-)
+// ErrAdapterNotReady wraps every Enable() failure: Bluetooth switched off, the
+// grant missing or still pending, or a slow power-on after boot. The cause is
+// usually gone a minute later, so callers retry instead of caching it.
+var ErrAdapterNotReady = errors.New("ble: adapter not ready")
 
-// Adapter returns the singleton bluetooth.Adapter with Enable() called exactly once.
+// adapterGate runs the adapter's Enable() until it succeeds, then never again.
+//
+// tinygo.org/x/bluetooth v0.16.0 clears its internal poweredChan on both the
+// success and the failure path of Enable(), so a call after a failed one is
+// safe; it re-checks the CBCentralManager state and waits up to 10 s for
+// poweredOn. The mutex keeps two callers from overlapping ("already calling
+// Enable function") and caches only success, never the error.
+type adapterGate struct {
+	mu     sync.Mutex
+	enable func() error
+	ready  bool
+}
+
+func (g *adapterGate) ensure() error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.ready {
+		return nil
+	}
+	if err := g.enable(); err != nil {
+		return fmt.Errorf("%w: %w", ErrAdapterNotReady, err)
+	}
+	g.ready = true
+	return nil
+}
+
+var defaultGate = &adapterGate{enable: bluetooth.DefaultAdapter.Enable}
+
+// Adapter returns the singleton bluetooth.Adapter, enabling it on first use. A
+// failed enable is retried on the next call; the error wraps ErrAdapterNotReady.
 func Adapter() (*bluetooth.Adapter, error) {
-	adapterOnce.Do(func() {
-		adapterErr = bluetooth.DefaultAdapter.Enable()
-	})
-	if adapterErr != nil {
-		return nil, fmt.Errorf("ble: enable adapter: %w", adapterErr)
+	if err := defaultGate.ensure(); err != nil {
+		return nil, err
 	}
 	return bluetooth.DefaultAdapter, nil
 }

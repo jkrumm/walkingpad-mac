@@ -146,7 +146,8 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger, version strin
 				log.Error("session.ingest", "err", err)
 			}
 		},
-		OnError: func(err error) { log.Warn("ble.decode", "err", err) },
+		OnError:        func(err error) { log.Warn("ble.decode", "err", err) },
+		OnAdapterState: statusProv.setAdapterState,
 		OnConnect: func(addr string) {
 			statusProv.markConnected(addr)
 			log.Info("ble.bound", "addr", addr)
