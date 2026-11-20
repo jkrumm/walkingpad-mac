@@ -20,6 +20,10 @@ final class HostModel {
   func refresh() async {
     do {
       state = ConnectionState(status: try await client.status())
+    } catch is CancellationError {
+      // The popover closed mid-request; the next open refreshes.
+    } catch let error as URLError where error.code == .cancelled {
+      // Same, surfaced by URLSession.
     } catch {
       state = ConnectionState(error: error)
     }
