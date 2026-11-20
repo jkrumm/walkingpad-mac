@@ -4,8 +4,10 @@
 # A restart drops the BLE link and the in-flight session, so a deploy must not
 # land in the middle of a walk. Reads GET /status and refuses when belt_state is
 # anything but stopped or standby (active, starting, stopping, unknown).
-# Fails open: when /status does not answer, or carries no belt_state (the pad is
-# not connected, so nothing is moving), the deploy proceeds.
+# A pad that is not connected carries no belt_state; if a session is still open
+# then (the link dropped mid-walk), that refuses too.
+# Fails open, loudly: /status unanswered, or answered 401/403 because the daemon
+# has an http_token and KSWP_HTTP_TOKEN is not exported here, proceeds with a note.
 #
 # Usage:  FORCE=1 scripts/deploy-guard.sh [<status-url>]
 # Reads only. Sends nothing to the belt.
@@ -19,12 +21,34 @@ if [[ ${FORCE:-} == 1 ]]; then
   exit 0
 fi
 
-body=$(curl -fsS --max-time 3 "$URL" 2>/dev/null) || {
-  echo "deploy guard: /status does not answer, proceeding"
-  exit 0
-}
+CURL=${CURL:-curl}
+auth=()
+[[ -n ${KSWP_HTTP_TOKEN:-} ]] && auth=(-H "Authorization: Bearer $KSWP_HTTP_TOKEN")
 
+TMP=$(mktemp)
+trap 'rm -f "$TMP"' EXIT
+code=$("$CURL" -sS --max-time 3 ${auth[@]+"${auth[@]}"} -o "$TMP" -w '%{http_code}' "$URL" 2>/dev/null) || code=""
+
+case "$code" in
+  "" | 5??)
+    echo "deploy guard: /status does not answer, proceeding"
+    exit 0
+    ;;
+  401 | 403)
+    echo "deploy guard: WARNING — /status answered $code (http_token set?); belt state NOT checked." >&2
+    echo "deploy guard: export KSWP_HTTP_TOKEN to enable the check. Proceeding." >&2
+    exit 0
+    ;;
+esac
+
+body=$(cat "$TMP")
 state=$(printf '%s' "$body" | sed -n 's/.*"belt_state":"\([^"]*\)".*/\1/p')
+
+if [[ -z $state && $body != *'"current_session":null'* && $body == *'"current_session":{'* ]]; then
+  echo "deploy guard: REFUSED — the pad is not connected but a session is still open." >&2
+  echo "deploy guard: wait for it to close, or run with FORCE=1 to override." >&2
+  exit 1
+fi
 
 case "$state" in
   "" | stopped | standby)

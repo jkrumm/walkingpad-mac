@@ -39,7 +39,18 @@ done
 expect "FORCE=1 overrides an active belt" 0 FORCE=1 1 "$(status_file active)"
 
 echo '{"connected":false,"current_session":null}' >"$TMP/disconnected.json"
-expect "proceeds when the pad is not connected" 0 - "" "file://$TMP/disconnected.json"
+expect "proceeds when the pad is not connected and no session is open" 0 - "" "file://$TMP/disconnected.json"
+echo '{"connected":false,"current_session":{"uuid":"x","samples":[]}}' >"$TMP/orphan.json"
+expect "refuses when the pad dropped with a session open" 1 "session is still open" "" "file://$TMP/orphan.json"
+
+# 401 (daemon has an http_token): loud warning on stderr, deploy proceeds.
+cat >"$TMP/curl401" <<'STUB'
+#!/usr/bin/env bash
+printf 401
+STUB
+chmod +x "$TMP/curl401"
+out=$(CURL="$TMP/curl401" "$GUARD" http://127.0.0.1:7706/status 2>&1 >/dev/null); rc=$?
+if [[ $rc -eq 0 && $out == *"WARNING"* && $out == *"401"* ]]; then echo "ok   warns and proceeds on 401"; else echo "FAIL 401: exit $rc, stderr: $out"; fail=1; fi
 expect "proceeds when /status is unreachable" 0 "does not answer" "" "http://127.0.0.1:1/status"
 expect "proceeds on a body that is not JSON" 0 - "" "$(printf 'x' >"$TMP/junk" && echo "file://$TMP/junk")"
 
