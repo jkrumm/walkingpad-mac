@@ -1,0 +1,43 @@
+# XcodeGen spec. `make check-apple` writes apple/WalkingPad.xcodeproj (gitignored) and builds it.
+# The app is a client of the Go host's HTTP API (docs/spec.md); it owns no Bluetooth and no database.
+name: WalkingPad
+options:
+  bundleIdPrefix: com.jkrumm
+  deploymentTarget:
+    macOS: "26.0"
+  createIntermediateGroups: true
+
+packages:
+  PadKit:
+    path: Packages/PadKit
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+    GCC_TREAT_WARNINGS_AS_ERRORS: YES
+    MARKETING_VERSION: "0.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    # Check builds are unsigned; signing arrives with the install row (docs/plan.yaml app-install).
+    CODE_SIGNING_ALLOWED: NO
+    CODE_SIGN_IDENTITY: ""
+
+targets:
+  WalkingPad:
+    type: application
+    platform: macOS
+    sources: [WalkingPad]
+    dependencies:
+      - package: PadKit
+    settings:
+      base:
+        PRODUCT_NAME: WalkingPad
+        # The host daemon on the mini is com.jkrumm.walkingpad and keeps its Bluetooth grant under that id.
+        PRODUCT_BUNDLE_IDENTIFIER: com.jkrumm.walkingpad.client
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: WalkingPad
+        INFOPLIST_KEY_LSUIElement: YES
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.healthcare-fitness
+        ASSETCATALOG_COMPILER_APPICON_NAME: ""

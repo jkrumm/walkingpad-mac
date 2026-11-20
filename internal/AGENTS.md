@@ -1,0 +1,17 @@
+# internal/ — the Go host
+
+The P1 diverges from the public references in ways that fail silently. Read every item before
+changing BLE, session or API code.
+
+## BLE and session gotchas
+
+1. **macOS Bluetooth requires a `.app` bundle.** A bare binary anywhere on `$PATH` (`/opt/homebrew/bin`, `/usr/local/bin`, etc.) is *silently denied* by CoreBluetooth — `Scan()` just returns nothing. The daemon must run from inside `WalkingPad.app` with `Info.plist` declaring `NSBluetoothAlwaysUsageDescription` + `NSBluetoothPeripheralUsageDescription`. We do NOT install a bare binary anywhere — the `.app` at `/Applications/` is the only install target. See docs/protocol.md.
+2. **BLE write rate limit.** Device drops frames if commands arrive faster than ~1.4 Hz. **Enforce a 700 ms minimum gap** between any writes (the `frames.go` writer owns this). Status polls and user commands share the same write channel.
+3. **CRC scope.** `sum(buf[1:-2]) & 0xFF` — exclusive of start byte AND checksum slot AND terminator. Get this wrong and the device silently ignores commands. Always test against the fixtures in `ble/frames_test.go`.
+4. **Single BLE owner — empirically confirmed on this P1.** The peripheral accepts exactly one connected central at a time (verified 2026-05-17: while our daemon held the connection, the Garmin Connect IQ app could not connect, and vice versa). The daemon is the sole BLE client on the Mac. Raycast / CLI / argo all go through the HTTP API. **Open design call:** decide a slot-release policy (always grab and hold? release when the user opens KS Fit / starts a Garmin workout? expose a `POST /release` endpoint?). Never add a second BLE client.
+5. **Speed encoding.** Wire format is `speed_kmh × 10` as a single byte (uint8). Range 0–60. Always validate the input before encoding.
+6. **Distance encoding.** Wire format is uint24 BE in units of **10 m**. Divide raw by 100 for km, by 10 for metres.
+7. **Calories are NOT in the status frame.** Compute client-side using the MET formula (`session/calories.go`). User weight from config.
+8. **Session counters reset on every STOP, not only on STANDBY.** Verified on the user's P1 (POC hardware run, 2026-05-17): the moment the belt state byte transitions to `0x00` (STOPPED), `time / distance / steps` all read 0 in that same frame. The `0x04` (STOPPING) frame is the **last chance** to capture in-session totals — `BeltState.IsRunning()` returns true for both `0x02` and `0x04` so the session manager won't drop it. Do not assume monotonic counters across any stop.
+9. **State-byte mapping diverges from ph4r05.** docs/protocol.md §4.4 has the verified table; the short version is `0x00=STOPPED, 0x02=ACTIVE, 0x04=STOPPING, 0x05=STANDBY, 0x07/0x08/0x09=3-2-1 start ramp`. Byte `0x01` is never emitted by current P1 firmware. Trust the Go enum in `internal/ble/frames.go`, not the ph4 docs.
+10. **Set-speed is dropped while STOPPED or ramping.** Verified on the user's P1 (2026-05-21): a set-speed frame sent before the belt is `0x02` (ACTIVE) is ignored — the belt ramps to its stored `START_SPEED` pref (default 2 km/h) instead of the requested speed. To start at a target speed you must send start, **wait for the belt to reach ACTIVE (past the 3-2-1 ramp), then send set-speed**. `serve/controller.go` owns this: `Start`/`SetSpeed` call `startAtSpeed` → `ensureRunning` → `waitForActive` → set. This blocks the HTTP request ~4-5 s; that is intentional. Don't "optimize" by sending set-speed before start — it silently does nothing.

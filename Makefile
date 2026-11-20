@@ -17,6 +17,12 @@ LOG_ERR       := $(LOG_DIR)/$(BINARY).err
 HTTP_PORT     := 7706
 DATA_DIR      := $(HOME)/Library/Application Support/$(APP_NAME)
 
+# Swift client (apple/): sources the format and lint tiers read, pinned tools, the Xcode slot.
+SWIFT_FILES   := apple/WalkingPad apple/Packages/PadKit/Sources apple/Packages/PadKit/Tests apple/Packages/PadKit/Package.swift
+PADKIT        := apple/Packages/PadKit
+TOOLS         := scripts/tools.sh
+APPLE_SLOT    := scripts/apple-slot.sh
+
 VERSION       := $(shell ./scripts/build-version.sh)
 ROLLBACK_DIR  := $(HOME)/.local/state/$(BINARY)/rollback
 ROLLBACK_APP  := $(ROLLBACK_DIR)/$(APP_NAME).app
@@ -28,21 +34,44 @@ LDFLAGS       := -ldflags "-X main.Version=$(VERSION) -s -w"
 help: ## (default) print this menu
 	@printf "WalkingPad \033[1m%s\033[0m\n\n" "$(VERSION)"
 	@awk 'BEGIN {FS = ":.*##"; printf "Targets:\n"} \
-	  /^[a-zA-Z_-]+:.*?##/ {printf "  \033[36m%-7s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	  /^[a-zA-Z_-]+:.*?##/ {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@printf "\n\033[1mNormal flow\033[0m\n"
 	@printf "  1. \033[36mmake up\033[0m   — every time you change Go or Raycast code.\n"
 	@printf "                It rebuilds the daemon, swaps /Applications/WalkingPad.app,\n"
 	@printf "                kickstarts the LaunchAgent, prints the live version for\n"
 	@printf "                confirmation, then starts the Raycast dev loop.\n"
 	@printf "  2. \033[36mmake logs\033[0m — print the last daemon log lines (bounded).\n"
-	@printf "  3. \033[36mmake test\033[0m — full Go race suite + Raycast typecheck.\n"
+	@printf "  3. \033[36mmake check-fast\033[0m — Go, Raycast and Swift checks; \033[36mmake check\033[0m adds the app build.\n"
 
-check: ## run all local validation (gofmt, vet, lint, tests) — non-zero on failure
+check: check-fast check-apple ## the full gate (CI runs it): check-fast plus the Xcode build of the app
+
+check-fast: ## the lead's tier, no xcodebuild: gofmt, vet, golangci-lint, go test -race, raycast tsc, Swift lint, swift test
 	@unformatted=$$(gofmt -l $$(git ls-files '*.go')); \
 	  if [ -n "$$unformatted" ]; then echo "gofmt: files need formatting:"; echo "$$unformatted"; exit 1; fi
 	go vet ./...
 	$(MAKE) --no-print-directory lint
 	$(MAKE) --no-print-directory test
+	$(MAKE) --no-print-directory lint-swift
+	$(MAKE) --no-print-directory test-swift
+
+check-apple: ## xcodegen + xcodebuild of apple/WalkingPad through scripts/apple-slot.sh (one Xcode job on the mini)
+	cd apple && "$$(../$(TOOLS) xcodegen)" generate --quiet
+	$(APPLE_SLOT) xcodebuild -project apple/WalkingPad.xcodeproj -scheme WalkingPad -configuration Debug \
+	  -destination 'platform=macOS' -derivedDataPath apple/.dd CODE_SIGNING_ALLOWED=NO build
+
+lint-swift: ## swift format lint + SwiftLint (pinned by scripts/tools.sh) over apple/
+	swift format lint --strict -r $(SWIFT_FILES)
+	$(TOOLS) --self-test
+	"$$($(TOOLS) swiftlint)" lint --strict --no-cache --quiet
+
+test-swift: ## swift test of apple/Packages/PadKit (decodes contracts/fixtures)
+	cd $(PADKIT) && swift test
+
+test-live: ## PadKit decodes GET /status and /sessions from the live host (reads only)
+	cd $(PADKIT) && PADKIT_LIVE_URL=http://127.0.0.1:$(HTTP_PORT) swift test --filter LiveHostTests
+
+contracts: ## rewrite contracts/fixtures from the API handlers after an intended response change
+	go test ./internal/api -run TestContractFixtures -count=1 -update
 
 up: deploy ## rebuild daemon, deploy, reload, verify, start Raycast dev (the one command for everything)
 	@./scripts/raycast-dev.sh
@@ -104,15 +133,16 @@ scan: ## list nearby WalkingPad BLE devices (dev tool, not the daemon)
 	@go build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY) $(CMD_DIR)
 	$(BIN_DIR)/$(BINARY) scan
 
-fmt: ## format Go + tidy modules
+fmt: ## format Go + Swift, tidy modules
 	gofmt -s -w .
 	go mod tidy
+	swift format --in-place -r $(SWIFT_FILES)
 
 lint: ## run golangci-lint (pre-commit hook also runs this)
 	@which golangci-lint > /dev/null || (echo "install: brew install golangci-lint" && exit 1)
 	golangci-lint run ./...
 
 clean: ## remove build artifacts
-	rm -rf $(BIN_DIR) coverage.out
+	rm -rf $(BIN_DIR) coverage.out apple/.dd apple/WalkingPad.xcodeproj $(PADKIT)/.build
 
-.PHONY: help check up deploy version rollback test verify logs scan fmt lint clean
+.PHONY: help check check-fast check-apple lint-swift test-swift test-live contracts up deploy version rollback test verify logs scan fmt lint clean

@@ -31,6 +31,9 @@ pre-commit:
     test:
       glob: "*.go"
       run: go test -race -count=1 ./...
+    swift-format:
+      glob: "*.swift"
+      run: swift format lint --strict {staged_files}
 
 pre-push:
   commands:
