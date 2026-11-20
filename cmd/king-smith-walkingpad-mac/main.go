@@ -115,9 +115,9 @@ func runScan(ctx context.Context, args []string) int {
 no BLE devices at all after %s.
 
 This almost always means CoreBluetooth denied access silently:
-  - The .app bundle is unsigned. Ad-hoc sign and re-grant:
-      codesign --force --deep --sign - /Applications/WalkingPad.app
-      xattr -cr /Applications/WalkingPad.app
+  - The .app bundle lost its signature or its grant. Redeploy it signed (make deploy
+    signs with Developer ID, see AGENTS.md "Signing"), then re-grant:
+      codesign -dr- /Applications/WalkingPad.app   # must not be a cdhash requirement
       tccutil reset Bluetooth com.jkrumm.walkingpad
       open /Applications/WalkingPad.app   # accept the prompt
   - Or: Bluetooth is off (System Settings → Bluetooth).

@@ -65,8 +65,9 @@ with no Raycast dev loop and no commands sent to the belt.
   its password file, dotfiles `docs/apple-signing.md`), else ad-hoc with a warning. macOS keeps the
   Bluetooth grant against the designated requirement: Developer ID's is the bundle id plus the team,
   identical on every build; ad-hoc's is the cdhash, so each rebuild re-prompts on the mini display and
-  BLE times out until someone clicks Allow. `SIGN_IDENTITY=-` forces ad-hoc. No hardened runtime, no
-  notarisation (local build, never quarantined). Test: `scripts/test-build-app-bundle.sh`. The first
+  BLE times out until someone clicks Allow. `SIGN_IDENTITY=-` forces ad-hoc. A signing failure aborts the
+  build rather than installing an unsigned bundle. The daemon bundle has no hardened runtime and no
+  notarisation (local build, never quarantined; the Swift app's Developer ID release is separate). Test: `scripts/test-build-app-bundle.sh`. The first
   deploy that switches from ad-hoc to Developer ID prompts once.
 - **Version.** `scripts/build-version.sh` stamps the sha; the why is in its header.
 
