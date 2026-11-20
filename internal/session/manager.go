@@ -16,8 +16,8 @@
 //     than resumeMaxAge; otherwise it force-closes it at the last sample ts.
 //
 // The rules originally lived in PRD §7; this docstring is now the source of
-// truth (the PRD is updated to match). Gotchas referenced from AGENTS.md
-// #8/#9 still apply: counters reset on every STOP, not only on STANDBY, and
+// truth (the PRD is updated to match). Gotchas referenced from
+// internal/AGENTS.md #8/#9 still apply: counters reset on every STOP, not only on STANDBY, and
 // BeltState.IsRunning() intentionally returns true for both ACTIVE and
 // STOPPING so the final decel frame is captured.
 //
