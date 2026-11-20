@@ -107,6 +107,14 @@ type rig struct {
 
 func newRig(t *testing.T, token string) *rig {
 	t.Helper()
+	return newRigWith(t, Config{Token: token})
+}
+
+// newRigWith builds a rig around an arbitrary server config; the rig's own
+// request helpers send cfg.Token as the bearer when it is set.
+func newRigWith(t *testing.T, cfg Config) *rig {
+	t.Helper()
+	token := cfg.Token
 	st, err := store.Open(filepath.Join(t.TempDir(), "api.sqlite"))
 	if err != nil {
 		t.Fatalf("store: %v", err)
@@ -118,7 +126,8 @@ func newRig(t *testing.T, token string) *rig {
 	statusFake := &fakeStatus{}
 	syncerFake := &fakeSyncer{}
 
-	s := New(Config{Addr: "127.0.0.1:0", Token: token, Version: "test", Location: time.UTC}, Deps{
+	cfg.Addr, cfg.Version, cfg.Location = "127.0.0.1:0", "test", time.UTC
+	s := New(cfg, Deps{
 		Store:      st,
 		Manager:    mgr,
 		Controller: ctrl,
@@ -225,6 +234,88 @@ func TestAuth_DisabledWhenTokenEmpty(t *testing.T) {
 	r := newRig(t, "")
 	if got := r.rawDo(t, "GET", "/status"); got != 200 {
 		t.Errorf("status = %d, want 200 (no auth required)", got)
+	}
+}
+
+// bearerDo sends one request with an arbitrary Authorization header ("" sends none).
+func (r *rig) bearerDo(t *testing.T, method, path, authz string) int {
+	t.Helper()
+	req, err := http.NewRequest(method, r.srv.URL+path, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if authz != "" {
+		req.Header.Set("Authorization", authz)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("%s %s: %v", method, path, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	return resp.StatusCode
+}
+
+// TestListenerAuth is the contract of the two listeners: the loopback one with
+// and without http_token, the remote one (RequireToken) with a token.
+func TestListenerAuth(t *testing.T) {
+	const tok = "s3cret"
+	listeners := []struct {
+		name                                                   string
+		cfg                                                    Config
+		wantNoHeader, wantWrong, wantRight, wantHealthNoHeader int
+	}{
+		{"loopback without token", Config{}, 200, 200, 200, 200},
+		{"loopback with token", Config{Token: tok}, 401, 401, 200, 200},
+		{"remote", Config{Token: tok, RequireToken: true}, 401, 401, 200, 401},
+		{"remote with empty token fails closed", Config{RequireToken: true}, 401, 401, 401, 401},
+	}
+	routes := []struct{ method, path string }{{"GET", "/status"}, {"POST", "/stop"}}
+
+	for _, l := range listeners {
+		for _, rt := range routes {
+			t.Run(l.name+" "+rt.method+" "+rt.path, func(t *testing.T) {
+				r := newRigWith(t, l.cfg)
+				cases := []struct {
+					name  string
+					authz string
+					want  int
+				}{
+					{"no header", "", l.wantNoHeader},
+					{"wrong token", "Bearer nope", l.wantWrong},
+					{"token without scheme", tok, l.wantWrong},
+					{"right token", "Bearer " + tok, l.wantRight},
+				}
+				for _, c := range cases {
+					if got := r.bearerDo(t, rt.method, rt.path, c.authz); got != c.want {
+						t.Errorf("%s: status = %d, want %d", c.name, got, c.want)
+					}
+				}
+				if got := r.bearerDo(t, "GET", "/health", ""); got != l.wantHealthNoHeader {
+					t.Errorf("/health without header = %d, want %d", got, l.wantHealthNoHeader)
+				}
+				if l.cfg.RequireToken && l.cfg.Token != "" {
+					if got := r.bearerDo(t, "GET", "/health", "Bearer "+tok); got != 200 {
+						t.Errorf("/health with token = %d, want 200", got)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestRemote_RejectedRequestNeverReachesController(t *testing.T) {
+	r := newRigWith(t, Config{Token: "tok", RequireToken: true})
+	if got := r.bearerDo(t, "POST", "/stop", "Bearer wrong"); got != 401 {
+		t.Fatalf("wrong token = %d", got)
+	}
+	if r.ctrl.stopCalls != 0 {
+		t.Fatalf("a rejected request reached the controller")
+	}
+	if got := r.bearerDo(t, "POST", "/stop", "Bearer tok"); got != 200 {
+		t.Fatalf("right token = %d", got)
+	}
+	if r.ctrl.stopCalls != 1 {
+		t.Errorf("stopCalls = %d, want 1", r.ctrl.stopCalls)
 	}
 }
 

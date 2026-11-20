@@ -55,6 +55,8 @@ func dispatch(ctx context.Context, cmd string, args []string) int {
 		return runConfig(ctx, args)
 	case "serve":
 		return runServe(ctx, args)
+	case "token":
+		return runToken(args)
 	case "version", "--version", "-v":
 		fmt.Println(Version)
 		return 0
@@ -79,6 +81,7 @@ Commands:
   connect    Connect, subscribe to status frames, poll ask_stats
   config     Show the resolved configuration (defaults + TOML + env)
   serve      Run the daemon: BLE link + session store + HTTP API
+  token      Print the bearer token of the remote listener (creates it on first use)
   version    Print the build version
   help       Show this help
 
@@ -305,6 +308,7 @@ func runConfig(_ context.Context, args []string) int {
 	view := cfg
 	if !*showSecrets {
 		view.Daemon.HTTPToken = redact(view.Daemon.HTTPToken)
+		view.Daemon.RemoteToken = redact(view.Daemon.RemoteToken)
 		view.Argo.Token = redact(view.Argo.Token)
 	}
 
@@ -316,6 +320,35 @@ func runConfig(_ context.Context, args []string) int {
 	if !cfg.SyncEnabled() {
 		fmt.Fprintln(os.Stderr, "\n# argo.token empty → sync worker disabled (set KSWP_ARGO_TOKEN or argo.token in TOML)")
 	}
+	return 0
+}
+
+// runToken prints the remote listener's bearer token: the configured one, else
+// the one in <data dir>/remote-token, created on first use. The only place the
+// token leaves the host's data dir.
+func runToken(args []string) int {
+	fs := flag.NewFlagSet("token", flag.ExitOnError)
+	defaultPath, _ := config.DefaultConfigPath()
+	configPath := fs.String("config", defaultPath, "TOML config path (missing file uses defaults)")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	cfg, err := config.Load(*configPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load config: %v\n", err)
+		return 1
+	}
+	dataDir, err := config.DataDir()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		return 1
+	}
+	token, err := config.ResolveRemoteToken(dataDir, cfg.Daemon.RemoteToken)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "remote token: %v\n", err)
+		return 1
+	}
+	fmt.Println(token)
 	return 0
 }
 

@@ -196,7 +196,16 @@ State machine in `session/manager.go`, fed by every status frame from BLE.
 
 ## 8. HTTP API
 
-Listens on `127.0.0.1:7706` (configurable). Loopback-only; no TLS. Bearer-token optional (off by default for local use; on if `config.api_token` set).
+Two listeners serve the same routes; both bind `127.0.0.1` and speak plain HTTP.
+
+| Listener | Config | Auth |
+|-|-|-|
+| Local | `[daemon] http_port` (default `7706`) | Off by default. With `http_token` (env `KSWP_HTTP_TOKEN`) every route except `GET /health` needs `Authorization: Bearer <token>`. |
+| Remote | `[daemon] remote_port` (default `0` = off, env `KSWP_REMOTE_PORT`) | Always. Every route, `GET /health` included, answers `401` without `Authorization: Bearer <remote token>`. |
+
+The remote listener exists for the tailnet door: the mini's Caddy terminates TLS and forwards to `127.0.0.1:<remote_port>`. `/health` is guarded there because nothing on the remote path probes it unauthenticated (the local Kuma probe and `make verify` use the local listener, which is why it stays open). Tokens are compared in constant time and never logged.
+
+**Remote token.** `remote_token` (env `KSWP_REMOTE_TOKEN`) wins when set. Otherwise the daemon creates `<data dir>/remote-token` (32 random bytes as hex, mode `0600`) on first start with `remote_port` set and reuses it afterwards. `walkingpad token` prints it (creating it if needed).
 
 ### Endpoints
 

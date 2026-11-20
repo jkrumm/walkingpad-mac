@@ -184,18 +184,16 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger, version strin
 	}
 
 	// --- HTTP API ---------------------------------------------------------
-	apiSrv := api.New(api.Config{
-		Addr:    "127.0.0.1:" + strconv.Itoa(cfg.Daemon.HTTPPort),
-		Token:   cfg.Daemon.HTTPToken,
-		Version: version,
-	}, api.Deps{
+	apiServers, err := newAPIServers(cfg, dataDir, version, api.Deps{
 		Store:      st,
 		Manager:    mgr,
 		Controller: ctrl,
 		Status:     statusProv,
 		Syncer:     syncer,
-		Logger:     log.With("component", "api"),
-	})
+	}, log)
+	if err != nil {
+		return err
+	}
 
 	// --- run loop ---------------------------------------------------------
 	runCtx, cancel := context.WithCancel(ctx)
@@ -230,12 +228,15 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger, version strin
 	log.Info("serve.starting",
 		"version", version,
 		"http_port", cfg.Daemon.HTTPPort,
+		"remote_port", cfg.Daemon.RemotePort,
 		"poll_interval_ms", cfg.Daemon.PollIntervalMs,
 		"data_dir", dataDir,
 	)
 
 	spawn("ble", func() error { return link.Run(runCtx) })
-	spawn("api", func() error { return apiSrv.ListenAndServe(runCtx) })
+	for _, s := range apiServers {
+		spawn(s.name, func() error { return s.srv.ListenAndServe(runCtx) })
+	}
 	spawn("tick", func() error { return runTickLoop(runCtx, mgr, log) })
 	if minDur := time.Duration(cfg.Session.MinDurationSeconds) * time.Second; minDur > 0 {
 		spawn("drop", func() error {
@@ -312,6 +313,42 @@ func runDropLoop(ctx context.Context, st *store.Store, minDur, resurrectWindow t
 			}
 		}
 	}
+}
+
+type namedServer struct {
+	name string
+	srv  *api.Server
+}
+
+// newAPIServers builds the HTTP listeners: always the loopback one on
+// http_port (token optional, /health open), and, when remote_port is set, a
+// second one on 127.0.0.1:remote_port that requires the remote bearer token on
+// every route. The mini's Caddy door terminates TLS and forwards to it. The
+// token is never logged.
+func newAPIServers(cfg config.Config, dataDir, version string, deps api.Deps, log *slog.Logger) ([]namedServer, error) {
+	local := deps
+	local.Logger = log.With("component", "api")
+	servers := []namedServer{{"api", api.New(api.Config{
+		Addr:    "127.0.0.1:" + strconv.Itoa(cfg.Daemon.HTTPPort),
+		Token:   cfg.Daemon.HTTPToken,
+		Version: version,
+	}, local)}}
+
+	if cfg.Daemon.RemotePort == 0 {
+		return servers, nil
+	}
+	token, err := config.ResolveRemoteToken(dataDir, cfg.Daemon.RemoteToken)
+	if err != nil {
+		return nil, fmt.Errorf("remote token: %w", err)
+	}
+	remote := deps
+	remote.Logger = log.With("component", "api-remote")
+	return append(servers, namedServer{"api-remote", api.New(api.Config{
+		Addr:         "127.0.0.1:" + strconv.Itoa(cfg.Daemon.RemotePort),
+		Token:        token,
+		RequireToken: true,
+		Version:      version,
+	}, remote)}), nil
 }
 
 // reasonOrNil flattens an error for structured logging.

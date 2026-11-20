@@ -76,6 +76,9 @@ The LaunchAgent label is `com.jkrumm.walkingpad`, installed at
 just kickstart it).
 ## Verify & Monitor
 
+- **Remote listener:** `[daemon] remote_port` (live config: 7708) is a second loopback listener that
+  answers 401 to every route, `/health` included, without the bearer from `walkingpad token`; the local
+  7706 listener and its open `/health` are untouched. The mini's Caddy door fronts 7708. Contract: `docs/protocol.md` section 8.
 - **Health URL:** `http://127.0.0.1:7706/health` (loopback only, unauthenticated)
   → `{"ok":true,"version":"<short sha>"}`. `make verify` probes it and exits non-zero if
   the daemon is not live; `make version` prints the live `version` (exit 1 when unanswered).

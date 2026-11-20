@@ -31,8 +31,14 @@ type Device struct {
 
 // Daemon holds process-wide knobs.
 type Daemon struct {
-	HTTPPort       int    `toml:"http_port"`
-	HTTPToken      string `toml:"http_token"`
+	HTTPPort  int    `toml:"http_port"`
+	HTTPToken string `toml:"http_token"`
+	// RemotePort, when non-zero, starts a second listener on 127.0.0.1 that
+	// answers 401 to every request without the remote bearer token. The mini's
+	// Caddy door terminates TLS and forwards to it. 0 keeps it off.
+	RemotePort int `toml:"remote_port"`
+	// RemoteToken overrides the generated <data dir>/remote-token file.
+	RemoteToken    string `toml:"remote_token"`
 	PollIntervalMs int    `toml:"poll_interval_ms"`
 	LogLevel       string `toml:"log_level"`
 }
@@ -92,6 +98,12 @@ var LogLevels = []string{"debug", "info", "warn", "error"}
 func (c Config) Validate() error {
 	if c.Daemon.HTTPPort < 1 || c.Daemon.HTTPPort > 65535 {
 		return fmt.Errorf("daemon.http_port out of range: %d", c.Daemon.HTTPPort)
+	}
+	if c.Daemon.RemotePort < 0 || c.Daemon.RemotePort > 65535 {
+		return fmt.Errorf("daemon.remote_port out of range (0 disables): %d", c.Daemon.RemotePort)
+	}
+	if c.Daemon.RemotePort != 0 && c.Daemon.RemotePort == c.Daemon.HTTPPort {
+		return fmt.Errorf("daemon.remote_port must differ from http_port: %d", c.Daemon.RemotePort)
 	}
 	// PRD gotcha: never poll BLE faster than 1 Hz; the device drops frames at
 	// >1.4 Hz and the MinWriteGap is 700 ms. 1000 ms is the floor.

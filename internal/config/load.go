@@ -73,6 +73,16 @@ func applyEnv(cfg *Config) error {
 	if v, ok := os.LookupEnv("KSWP_HTTP_TOKEN"); ok {
 		cfg.Daemon.HTTPToken = v
 	}
+	if v, ok := os.LookupEnv("KSWP_REMOTE_PORT"); ok {
+		p, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("KSWP_REMOTE_PORT: %w", err)
+		}
+		cfg.Daemon.RemotePort = p
+	}
+	if v, ok := os.LookupEnv("KSWP_REMOTE_TOKEN"); ok {
+		cfg.Daemon.RemoteToken = v
+	}
 	if v, ok := os.LookupEnv("KSWP_ARGO_URL"); ok {
 		cfg.Argo.URL = v
 	}

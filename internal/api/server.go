@@ -9,6 +9,8 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -37,6 +39,12 @@ type Config struct {
 	// Token, if non-empty, is required as a Bearer header on every route
 	// except /health.
 	Token string
+	// RequireToken makes the listener fail closed: every route, /health
+	// included, answers 401 without the bearer token, and an empty Token
+	// matches nothing. Set on the remote listener; the loopback listener
+	// leaves it off so a probe of /health and a tokenless local setup keep
+	// working.
+	RequireToken bool
 	// Version is reported by /health.
 	Version string
 	// Location decides which calendar day a session belongs to in
@@ -105,8 +113,8 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 func (s *Server) routes() http.Handler {
 	mux := http.NewServeMux()
 
-	// /health is the only unauthenticated route.
-	mux.HandleFunc("GET /health", s.handleHealth)
+	// /health is unauthenticated unless the listener requires a token.
+	mux.Handle("GET /health", s.guard(s.handleHealth, s.cfg.RequireToken))
 
 	// Authenticated routes via subhandler. Pattern-routing requires Go 1.22+;
 	// we're on 1.26.
@@ -125,15 +133,21 @@ func (s *Server) routes() http.Handler {
 }
 
 // auth wraps a handler with the Bearer-token check. When cfg.Token is empty
-// the middleware is a no-op and the handler is called directly.
+// and the listener does not require a token, the middleware is a no-op and
+// the handler is called directly.
 func (s *Server) auth(h http.HandlerFunc) http.Handler {
-	if s.cfg.Token == "" {
+	return s.guard(h, s.cfg.Token != "" || s.cfg.RequireToken)
+}
+
+func (s *Server) guard(h http.HandlerFunc, enforce bool) http.Handler {
+	if !enforce {
 		return h
 	}
+	want := sha256.Sum256([]byte("Bearer " + s.cfg.Token))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		got := r.Header.Get("Authorization")
-		want := "Bearer " + s.cfg.Token
-		if got != want {
+		// Hash both sides so the constant-time compare also hides the length.
+		got := sha256.Sum256([]byte(r.Header.Get("Authorization")))
+		if s.cfg.Token == "" || subtle.ConstantTimeCompare(got[:], want[:]) != 1 {
 			writeError(w, http.StatusUnauthorized, "missing or bad bearer token")
 			return
 		}

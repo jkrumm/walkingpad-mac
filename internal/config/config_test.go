@@ -254,6 +254,8 @@ func clearEnv(t *testing.T) {
 		"KSWP_LOG_LEVEL",
 		"KSWP_HTTP_PORT",
 		"KSWP_HTTP_TOKEN",
+		"KSWP_REMOTE_PORT",
+		"KSWP_REMOTE_TOKEN",
 		"KSWP_ARGO_URL",
 		"KSWP_ARGO_TOKEN",
 	} {

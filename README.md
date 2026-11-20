@@ -81,6 +81,7 @@ address = ""             # optional BLE address pin — leave empty to auto-disc
 
 [daemon]
 http_port = 7706
+# remote_port = 0        # >0 adds a second listener on 127.0.0.1 that always requires a bearer token
 log_level = "info"       # debug | info | warn | error
 
 [session]
@@ -94,6 +95,8 @@ weight_kg = 80.0         # used for calorie computation
 url = ""                 # leave empty to disable Argo sync
 # token = "Bearer …"
 ```
+
+The remote listener (`remote_port`) is for a TLS-terminating reverse proxy on the same host. Its token is `remote_token` (or `KSWP_REMOTE_TOKEN`), else a generated `remote-token` file in the data directory; `walkingpad token` prints it. The local listener keeps its optional `http_token`; see [docs/protocol.md](docs/protocol.md) section 8.
 
 All fields optional. Without `argo.url` set, sessions stay local — you still get full control and history, just no remote sync.
 
