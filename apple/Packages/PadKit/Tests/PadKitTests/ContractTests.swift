@@ -16,6 +16,8 @@ import Testing
       "sessions-empty": SessionList.self,
       "session-detail": SessionDetail.self,
       "summary-all": Summary.self,
+      "summary-days": DaySummaries.self,
+      "summary-days-empty": DaySummaries.self,
       "status-disconnected": Status.self,
       "status-stopped": Status.self,
       "status-starting": Status.self,

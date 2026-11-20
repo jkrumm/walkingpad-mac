@@ -38,9 +38,9 @@ disabled_rules:
   - vertical_whitespace
   - void_return
 
-# The API's wire names (`ok`, `ts`) stay as the host writes them.
+# The API's wire names (`ok`, `ts`, `to`) stay as the host writes them.
 identifier_name:
-  excluded: [ok, ts, id]
+  excluded: [ok, ts, id, to]
 
 opt_in_rules:
   - force_unwrapping

@@ -28,7 +28,8 @@ public final class PadStore {
   public var startSpeed: Double
   public private(set) var isPopoverOpen = false
 
-  @ObservationIgnored private var client: PadClient?
+  /// The host the store polls; nil while none is set. The History window reads through it too.
+  public private(set) var client: PadClient?
   @ObservationIgnored private let sleep: Sleeper
   @ObservationIgnored private let now: @Sendable () -> Date
   @ObservationIgnored private var nap: Task<Void, Never>?

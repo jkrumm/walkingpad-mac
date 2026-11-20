@@ -24,20 +24,23 @@
     let window: NSWindow
     let isPopover: Bool
 
-    init(content: AnyView, width: CGFloat, isPopover: Bool, dark: Bool) {
+    init(
+      content: AnyView, width: CGFloat, height fixedHeight: CGFloat? = nil, isPopover: Bool,
+      dark: Bool, title: String = "WalkingPad Settings"
+    ) {
       self.isPopover = isPopover
       let host = NSHostingController(rootView: content)
       host.sizingOptions = []
       let fitting = NSHostingView(rootView: content)
       fitting.frame = NSRect(x: 0, y: 0, width: width, height: 10)
-      let height = ceil(fitting.fittingSize.height)
+      let height = fixedHeight ?? ceil(fitting.fittingSize.height)
       let style: NSWindow.StyleMask = isPopover ? [.borderless] : [.titled, .closable]
       window = OffscreenWindow(
         contentRect: NSRect(x: -30000, y: -30000, width: width, height: height), styleMask: style,
         backing: .buffered, defer: false)
       window.isReleasedWhenClosed = false
       window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
-      window.title = "WalkingPad Settings"
+      window.title = title
       window.contentViewController = host
       window.setContentSize(NSSize(width: width, height: height))
       window.setFrameOrigin(NSPoint(x: -30000, y: -30000))

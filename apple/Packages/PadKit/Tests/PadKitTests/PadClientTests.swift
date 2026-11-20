@@ -50,6 +50,15 @@ final class FakeTransport: HTTPTransport, @unchecked Sendable {
     #expect(transport.requests.first?.value(forHTTPHeaderField: "Authorization") == nil)
   }
 
+  @Test func summaryDaysAsksForAnInclusiveDateRange() async throws {
+    let transport = FakeTransport(body: try Fixtures.data("summary-days"))
+    let days = try await client(transport).summaryDays(from: "2026-05-16", to: "2026-05-19")
+    #expect(days.days.count == 4)
+    #expect(
+      transport.requests.first?.url?.absoluteString
+        == "http://127.0.0.1:7706/summary/days?from=2026-05-16&to=2026-05-19")
+  }
+
   @Test func sessionsPassLimitAndBefore() async throws {
     let transport = FakeTransport(body: try Fixtures.data("sessions"))
     let before = Date(timeIntervalSince1970: 1_779_024_131)

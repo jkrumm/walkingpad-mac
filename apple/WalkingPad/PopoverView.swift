@@ -257,7 +257,9 @@ private struct PhaseNotice: View {
 
 private struct PopoverFooter: View {
   var body: some View {
-    HStack {
+    HStack(spacing: 14) {
+      HistoryButton()
+        .buttonStyle(.borderless)
       SettingsButton(label: "Settings…", icon: false)
         .buttonStyle(.borderless)
       Spacer()

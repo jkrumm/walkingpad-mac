@@ -141,7 +141,7 @@ public struct Status: Codable, Equatable, Sendable {
 }
 
 /// A stored session. `endedAt` is nil while it is open, `syncedAt` until Argo has it.
-public struct Session: Codable, Equatable, Sendable {
+public struct Session: Codable, Equatable, Hashable, Sendable {
   public let uuid: String
   public let startedAt: Date
   public let endedAt: Date?
@@ -179,6 +179,25 @@ public struct Summary: Codable, Equatable, Sendable {
   public let distanceM: Double
   public let steps: Int
   public let kcal: Double
+}
+
+/// One calendar day of `GET /summary/days`: the closed sessions that started on it. `date` is
+/// the host's local day, "2026-05-17".
+public struct DaySummary: Codable, Equatable, Sendable {
+  public let date: String
+  public let sessions: Int
+  public let durationS: Int
+  public let distanceM: Double
+  public let steps: Int
+  public let kcal: Double
+}
+
+/// `GET /summary/days`: one entry per day from `from` to `to`, both inclusive, oldest first,
+/// days without a session included.
+public struct DaySummaries: Codable, Equatable, Sendable {
+  public let from: String
+  public let to: String
+  public let days: [DaySummary]
 }
 
 /// `POST /sync/argo`.

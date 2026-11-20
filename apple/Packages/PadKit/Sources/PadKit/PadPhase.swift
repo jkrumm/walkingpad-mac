@@ -106,7 +106,7 @@ public enum PadPhase: Equatable, Sendable {
   }
 
   /// A cancelled request: the caller went away, nothing to show.
-  static func isCancellation(_ error: any Error) -> Bool {
+  public static func isCancellation(_ error: any Error) -> Bool {
     if error is CancellationError { return true }
     if let urlError = error as? URLError, urlError.code == .cancelled { return true }
     return false

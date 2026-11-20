@@ -69,6 +69,13 @@ public struct PadClient: Sendable {
     try await get("summary", query: [URLQueryItem(name: "period", value: period.rawValue)])
   }
 
+  /// One total per calendar day from `from` to `to`, both inclusive, in the host's time zone.
+  public func summaryDays(from: String, to: String) async throws -> DaySummaries {
+    try await get(
+      "summary/days",
+      query: [URLQueryItem(name: "from", value: from), URLQueryItem(name: "to", value: to)])
+  }
+
   /// Starts the belt. The host waits out the 3-2-1 ramp before it applies `speedKmh`, so
   /// the call takes about five seconds. Without a speed the belt keeps its stored one.
   public func start(speedKmh: Double? = nil) async throws {

@@ -17,6 +17,13 @@ struct WalkingPadApp: App {
     }
     .menuBarExtraStyle(.window)
 
+    Window("WalkingPad History", id: HistoryView.windowID) {
+      HistoryView(model: delegate.history)
+    }
+    .defaultSize(width: 560, height: 700)
+    .defaultLaunchBehavior(.suppressed)
+    .restorationBehavior(.disabled)
+
     Window("WalkingPad Settings", id: SettingsView.windowID) {
       SettingsView(model: delegate.settings)
     }
@@ -31,6 +38,7 @@ struct WalkingPadApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
   let store: PadStore
   let settings: SettingsModel
+  let history: HistoryStore
   private var polling: Task<Void, Never>?
   private var hotkeys: HotkeyListener?
 
@@ -40,6 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     settings = SettingsModel(
       store: store, preferences: preferences, tokens: KeychainTokenStore(),
       loginItem: SMAppServiceLoginItem())
+    history = HistoryStore(client: { [store] in store.client })
     super.init()
   }
 

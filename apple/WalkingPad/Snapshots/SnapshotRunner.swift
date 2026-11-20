@@ -4,7 +4,7 @@
   import SwiftUI
 
   /// The entry point of the snapshot build: `WalkingPad --ui-snapshot <dir>` draws the popover in
-  /// every state and the Settings window, light and dark, and exits 0, or 1 when an image failed.
+  /// every state, the Settings window and the History window, light and dark, and exits 0, or 1 when an image failed.
   /// `SNAP_LIVE_URL` adds the popover against a running host (GET /status only).
   @main
   enum SnapshotEntry {
@@ -81,7 +81,9 @@
             isPopover: true, dark: dark)
         }
         failures += await drawSettings(dark: dark)
+        failures += await drawHistory(dark: dark)
         failures += await drawLive(dark: dark)
+        failures += await drawLiveHistory(dark: dark)
       }
       print("wrote snapshots to \(output.path), \(failures) failed")
       return failures
@@ -120,6 +122,108 @@
         dark: dark)
     }
 
+    /// One History window state: what the stub host answers for the four reads.
+    struct HistoryScenario {
+      let name: String
+      let answer: SnapshotHost.Answer
+      let routes: [String: SnapshotHost.Answer]
+      var range = HistoryRange.days30
+    }
+
+    private func historyScenarios() -> [HistoryScenario] {
+      let busy = SnapshotHistory()
+      // The last walk is older than the 90 days of the chart: walks exist, the chart is empty.
+      let quiet = SnapshotHistory(quietDays: 120)
+      return [
+        HistoryScenario(
+          name: "history-30", answer: .json(SnapshotStatus.standby), routes: busy.routes()),
+        HistoryScenario(
+          name: "history-90", answer: .json(SnapshotStatus.standby), routes: busy.routes(),
+          range: .days90),
+        HistoryScenario(
+          name: "history-quiet", answer: .json(SnapshotStatus.standby), routes: quiet.routes()),
+        HistoryScenario(
+          name: "history-empty", answer: .json(SnapshotStatus.standby),
+          routes: SnapshotHistory.emptyRoutes),
+        HistoryScenario(name: "history-unreachable", answer: .unreachable, routes: [:]),
+        HistoryScenario(
+          name: "history-unauthorized",
+          answer: .http(401, #"{"error":"missing or bad bearer token"}"#), routes: [:]),
+      ]
+    }
+
+    private func historyStore(
+      _ scenario: HistoryScenario, extraRoutes: [String: SnapshotHost.Answer] = [:]
+    ) async -> HistoryStore? {
+      guard let base = Self.base else { return nil }
+      let host = SnapshotHost(
+        status: scenario.answer, routes: scenario.routes.merging(extraRoutes) { $1 })
+      let client = PadClient(baseURL: base, transport: host)
+      let history = HistoryStore(
+        client: { client }, calendar: SnapshotHistory.calendar, now: { SnapshotHistory.now })
+      history.range = scenario.range
+      await history.reload()
+      return history
+    }
+
+    private func drawHistory(dark: Bool) async -> Int {
+      var failures = 0
+      for scenario in historyScenarios() {
+        guard let history = await historyStore(scenario) else { return 1 }
+        failures += await draw(
+          AnyView(HistoryView(model: history)), name: scenario.name, width: 560, height: 720,
+          isPopover: false, dark: dark, title: "WalkingPad History")
+      }
+      // The detail of the newest walk, with its samples.
+      let data = SnapshotHistory()
+      if let walk = data.walks.first,
+        let history = await historyStore(
+          historyScenarios()[0], extraRoutes: data.detailRoute(for: walk)),
+        let session = history.sessions.first
+      {
+        failures += await draw(
+          AnyView(SessionDetailView(history: history, session: session) {}),
+          name: "history-detail", width: 560, height: 720, isPopover: false, dark: dark,
+          title: "WalkingPad History")
+      }
+      return failures
+    }
+
+    /// The History window against a running host (GETs only). `SNAP_LIVE_NOW=YYYY-MM-DD` puts
+    /// "today" there, to see the window with the last stored walks when the host's data is old.
+    private func drawLiveHistory(dark: Bool) async -> Int {
+      guard let raw = ProcessInfo.processInfo.environment["SNAP_LIVE_URL"], !raw.isEmpty,
+        let url = HostAddress.parse(raw)
+      else { return 0 }
+      let token = ProcessInfo.processInfo.environment["SNAP_LIVE_TOKEN"]
+      let client = PadClient(baseURL: url, token: token)
+      let calendar = Calendar.current
+      var today = Date()
+      if let text = ProcessInfo.processInfo.environment["SNAP_LIVE_NOW"],
+        let day = HistoryDates.date(text, calendar: calendar)
+      {
+        today = day.addingTimeInterval(12 * 3600)
+      }
+      let moment = today
+      let history = HistoryStore(client: { client }, calendar: calendar, now: { moment })
+      await history.reload()
+      print(
+        "live history: \(history.load) sessions=\(history.sessions.count)"
+          + " week=\(history.week.map { PadFormat.distance($0.distanceM) } ?? "-")"
+          + " month=\(history.month.map { PadFormat.distance($0.distanceM) } ?? "-")"
+          + " days=\(history.days.count) walkDays=\(history.days.filter { $0.sessions > 0 }.count)")
+      var failures = await draw(
+        AnyView(HistoryView(model: history)), name: "history-live", width: 560, height: 720,
+        isPopover: false, dark: dark, title: "WalkingPad History")
+      if let session = history.sessions.first(where: { $0.endedAt != nil }) {
+        failures += await draw(
+          AnyView(SessionDetailView(history: history, session: session) {}),
+          name: "history-live-detail", width: 560, height: 720, isPopover: false, dark: dark,
+          title: "WalkingPad History")
+      }
+      return failures
+    }
+
     /// The popover against a running host, polled once: proof of what the app shows there.
     private func drawLive(dark: Bool) async -> Int {
       guard let raw = ProcessInfo.processInfo.environment["SNAP_LIVE_URL"], !raw.isEmpty else {
@@ -142,9 +246,10 @@
         dark: dark)
     }
 
-    private func draw(_ content: AnyView, name: String, width: CGFloat, isPopover: Bool, dark: Bool)
-      async -> Int
-    {
+    private func draw(
+      _ content: AnyView, name: String, width: CGFloat, height: CGFloat? = nil, isPopover: Bool,
+      dark: Bool, title: String = "WalkingPad Settings"
+    ) async -> Int {
       let framed =
         isPopover
         ? AnyView(
@@ -153,7 +258,8 @@
             in: RoundedRectangle(cornerRadius: 14, style: .continuous)))
         : content
       let renderer = SnapshotRenderer(
-        content: framed, width: width, isPopover: isPopover, dark: dark)
+        content: framed, width: width, height: height, isPopover: isPopover, dark: dark,
+        title: title)
       defer { renderer.close() }
       await renderer.settle()
       await renderer.settle(300)

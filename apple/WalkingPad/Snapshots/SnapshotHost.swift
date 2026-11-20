@@ -13,6 +13,9 @@
 
     let status: Answer
     var holdWrites = false
+    /// Other GET routes, by path or by path and query ("/summary?period=week"); `/status` falls
+    /// back to `status`.
+    var routes: [String: Answer] = [:]
 
     func data(for request: URLRequest) async throws -> (Data, URLResponse) {
       guard let url = request.url else { throw URLError(.badURL) }
@@ -20,7 +23,9 @@
         if holdWrites { try await Task.sleep(for: .seconds(3600)) }
         return try reply(url, 200, #"{"ok":true}"#)
       }
-      switch status {
+      let path = url.path(percentEncoded: false)
+      let routed = routes[path + (url.query().map { "?" + $0 } ?? "")] ?? routes[path]
+      switch routed ?? status {
       case .json(let body): return try reply(url, 200, body)
       case .http(let code, let body): return try reply(url, code, body)
       case .unreachable: throw URLError(.cannotConnectToHost)
