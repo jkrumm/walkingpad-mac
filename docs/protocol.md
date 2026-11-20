@@ -278,16 +278,16 @@ CoreBluetooth on macOS 11+ requires the calling process to be a bundled `.app` w
 <plist version="1.0">
 <dict>
   <key>CFBundleIdentifier</key>          <string>com.jkrumm.walkingpad</string>
-  <key>CFBundleName</key>                <string>King-Smith-WalkingPad-Mac</string>
+  <key>CFBundleName</key>                <string>WalkingPad</string>
   <key>CFBundleExecutable</key>          <string>walkingpad</string>
   <key>CFBundleVersion</key>             <string>__VERSION__</string>
   <key>CFBundleShortVersionString</key>  <string>__VERSION__</string>
   <key>LSUIElement</key>                 <true/>   <!-- background-only, no Dock icon -->
   <key>LSMinimumSystemVersion</key>      <string>11.0</string>
   <key>NSBluetoothAlwaysUsageDescription</key>
-    <string>King-Smith-WalkingPad-Mac connects to your WalkingPad over Bluetooth to control the belt and record sessions.</string>
+    <string>WalkingPad connects to your WalkingPad over Bluetooth to control the belt and record sessions.</string>
   <key>NSBluetoothPeripheralUsageDescription</key>
-    <string>King-Smith-WalkingPad-Mac connects to your WalkingPad over Bluetooth to control the belt and record sessions.</string>
+    <string>WalkingPad connects to your WalkingPad over Bluetooth to control the belt and record sessions.</string>
 </dict>
 </plist>
 ```

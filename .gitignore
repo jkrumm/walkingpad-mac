@@ -1,8 +1,6 @@
 # Build artifacts
 /bin/
 /dist/
-/king-smith-walkingpad-mac
-/King-Smith-WalkingPad-Mac.app
 *.test
 *.out
 coverage.*
@@ -25,7 +23,7 @@ vendor/
 *.local
 config.local.toml
 
-# Local data (development) — production lives in ~/Library/Application Support/king-smith-walkingpad-mac/
+# Local data (development) — production lives in ~/Library/Application Support/WalkingPad/
 /data/
 *.sqlite
 *.sqlite-journal
