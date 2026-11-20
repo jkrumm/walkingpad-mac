@@ -102,8 +102,9 @@ raycast/                                 # TypeScript Raycast extension
 scripts/                                 # plist, Info.plist.tmpl, build-app-bundle.sh, tools.sh, apple-slot.sh
 contracts/fixtures/                      # golden API responses, written by internal/api/contract_test.go
 apple/project.yml                        # XcodeGen spec of the Swift menu bar app (the .xcodeproj is generated)
-apple/WalkingPad/                        # the app target (SwiftUI MenuBarExtra)
-apple/Packages/PadKit/                   # API models and async HTTP client; no UI code
+apple/WalkingPad/                        # the app target: menu bar item, popover, Settings window, hotkeys
+apple/WalkingPad/Snapshots/              # the offscreen snapshot harness (SNAPSHOT_HARNESS builds only)
+apple/Packages/PadKit/                   # API models, HTTP client, PadStore (polling, state, commands); no UI code
 ```
 
 ## Swift client (`apple/`)
@@ -121,6 +122,21 @@ apple/Packages/PadKit/                   # API models and async HTTP client; no 
   rest (`.swiftlint.yml`); tools are pinned with checksums in `scripts/tools.sh`.
 - The app's bundle id is `com.jkrumm.walkingpad.client`; `com.jkrumm.walkingpad` is the host daemon,
   whose Bluetooth grant is tied to that id.
+- `PadStore` (PadKit) is the one source of truth: it polls `GET /status` (`PollingPolicy`: 1 s while the
+  belt moves, a session is open or the popover shows, 10 s otherwise, never without a host), maps every
+  answer to one `PadPhase` and sends the commands. Views and hotkeys only read it and call it; behaviour
+  goes into PadKit with a test, the app target has none. Speed changes only while `active`, and a queued
+  speed goes out only after a fresh `/status` still reads active: the host starts a stopped belt on
+  `/speed`. Stop is held while a speed is in flight for the same reason.
+- Settings is a `Window` scene, never the `Settings` scene (an accessory app cannot bring it forward).
+  The host URL and start speed live in UserDefaults (`-hostURL <url>` overrides the URL for one run),
+  the token in the Keychain. Hotkeys are KeyboardShortcuts, pinned exactly in `apple/project.yml`.
+- `make snapshots` builds the app with `SNAPSHOT_HARNESS` (own derived data `apple/.dd-snap`) and draws
+  the popover in every `PadPhase` and the Settings window, light and dark, offscreen against an
+  in-memory host into `apple/.snapshots/` (`SNAP_DIR` overrides). `SNAP_LIVE_URL=http://127.0.0.1:7706`
+  adds `popover-live-*` from the running host (GET only) and prints its state. Temp HOME, no Keychain,
+  no login item, no network otherwise. Look at the PNGs after a UI change; there is no golden file.
+  Prominent buttons and toggles draw greyed: an offscreen window of an accessory app is never active.
 
 ## Coding conventions
 

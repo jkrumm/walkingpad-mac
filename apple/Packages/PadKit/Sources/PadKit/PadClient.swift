@@ -17,6 +17,8 @@ public enum PadError: Error, Equatable, Sendable {
   case http(status: Int, message: String?)
   /// The response was not HTTP.
   case notHTTP
+  /// No host is configured.
+  case notConfigured
 }
 
 /// The host's HTTP API (docs/protocol.md section 8), one method per route.
@@ -24,6 +26,12 @@ public struct PadClient: Sendable {
   public let baseURL: URL
   private let token: String?
   private let transport: any HTTPTransport
+
+  /// A read gives up after this long; a poll that hangs reads as an unreachable host.
+  public static let readTimeout: TimeInterval = 5
+  /// A write may take this long: `/start` and `/speed` from a standing belt block about five
+  /// seconds while the host waits out the ramp.
+  public static let commandTimeout: TimeInterval = 20
 
   /// `token` is sent as a bearer token when it is set; the host's loopback listener needs
   /// none unless its config sets `api_token`.
@@ -103,6 +111,7 @@ public struct PadClient: Sendable {
     if !query.isEmpty { url.append(queryItems: query) }
     var request = URLRequest(url: url)
     request.httpMethod = method
+    request.timeoutInterval = method == "GET" ? Self.readTimeout : Self.commandTimeout
     request.setValue("application/json", forHTTPHeaderField: "Accept")
     if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
     if let body {

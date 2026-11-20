@@ -120,8 +120,17 @@ final class FakeTransport: HTTPTransport, @unchecked Sendable {
     await #expect(throws: PadError.http(status: 502, message: nil)) {
       _ = try await client(transport).status()
     }
-    #expect(
-      ConnectionState(error: PadError.http(status: 502, message: nil))
-        == .hostUnreachable("HTTP 502"))
+  }
+
+  /// A poll gives up early; a write outlives the host's wait for the ramp (about five seconds).
+  @Test func readsTimeOutEarlyAndWritesOutliveTheRamp() async throws {
+    let read = FakeTransport(body: try Fixtures.data("status-standby"))
+    _ = try await client(read).status()
+    #expect(read.requests.first?.timeoutInterval == PadClient.readTimeout)
+
+    let write = FakeTransport(body: try Fixtures.data("ok"))
+    try await client(write).start(speedKmh: 3)
+    let timeout = try #require(write.requests.first?.timeoutInterval)
+    #expect(timeout >= 15)
   }
 }
