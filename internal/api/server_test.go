@@ -530,7 +530,8 @@ func TestSummaryDays_Validation(t *testing.T) {
 		status      int
 	}{
 		{"single day", "from=2026-07-30&to=2026-07-30", 200},
-		{"a year is allowed", "from=2025-07-30&to=2026-07-30", 200},
+		{"366 days inclusive is the limit", "from=2025-07-30&to=2026-07-30", 200},
+		{"367 days inclusive is too long", "from=2025-07-30&to=2026-07-31", 400},
 		{"missing from", "to=2026-07-30", 400},
 		{"missing to", "from=2026-07-30", 400},
 		{"not a date", "from=yesterday&to=2026-07-30", 400},

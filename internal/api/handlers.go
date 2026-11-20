@@ -264,7 +264,8 @@ func (s *Server) handleSummaryDays(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "to must not be before from")
 		return
 	}
-	if to.Sub(from) > maxSummaryDays*24*time.Hour {
+	// Inclusive: from and to are both in the answer.
+	if from.AddDate(0, 0, maxSummaryDays-1).Before(to) {
 		writeError(w, http.StatusBadRequest, fmt.Sprintf("range is limited to %d days", maxSummaryDays))
 		return
 	}
