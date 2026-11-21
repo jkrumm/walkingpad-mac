@@ -42,6 +42,8 @@ if security find-identity -v -p codesigning 2>/dev/null | grep -q 'Developer ID 
   ra=$(requirement "$TMP/a.app")
   [[ -n "$ra" && "$ra" == "$(requirement "$TMP/b.app")" ]] && ok "Developer ID requirement is identical across builds" || bad "Developer ID requirement is identical across builds"
   [[ "$ra" == *'identifier "com.jkrumm.walkingpad"'* && "$ra" != *cdhash* ]] && ok "requirement is the bundle id plus the certificate, no cdhash" || bad "requirement shape: $ra"
+  team=$(sed -nE 's/.*subject\.OU\] *= *"?([A-Za-z0-9]+)"?.*/\1/p' <<<"$ra")
+  [[ -n "$team" ]] && ! grep -q "$team" "$TMP/a.out" && grep -q 'subject.OU\] = <team>' "$TMP/a.out" && ok "build output redacts the team id" || bad "build output redacts the team id: $(cat "$TMP/a.out")"
   # copying the installed bundle (make deploy does cp -R) keeps the signature
   cp -R "$TMP/a.app" "$TMP/copy.app"
   [[ "$(requirement "$TMP/copy.app")" == "$ra" ]] && codesign --verify --strict "$TMP/copy.app" && ok "cp -R keeps the signature" || bad "cp -R keeps the signature"

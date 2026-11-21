@@ -129,4 +129,5 @@ SIGN_REQUIREMENT=$(codesign -d -r- "$APP_PATH" 2>&1 | sed -n 's/^#* *designated 
 touch "$APP_PATH"
 
 echo "wrote $APP_PATH (v$VERSION, signed: $SIGN_MODE)"
-echo "designated requirement: $SIGN_REQUIREMENT"
+# The requirement carries the team id (subject.OU); keep it out of the deploy log.
+echo "designated requirement: $(sed -E 's/(subject\.OU\] *= *)"?[A-Za-z0-9]+"?/\1<team>/g' <<<"$SIGN_REQUIREMENT")"
