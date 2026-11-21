@@ -25,6 +25,13 @@ APPLE_SLOT    := scripts/apple-slot.sh
 # check-apple builds never contains the harness); PNGs land in SNAP_DIR.
 SNAP_APP      := apple/.dd-snap/Build/Products/Debug/WalkingPad.app
 SNAP_DIR      ?= apple/.snapshots
+# make app-release: the Developer ID signed and notarized menu bar app. It is built where the repo lives and kept under
+# the state dir (not in the worktree, which goes away) so make install-macbook can pull it from the mini.
+CLIENT_DD     := apple/.dd-release
+CLIENT_BUILT  := $(CLIENT_DD)/Build/Products/Release/$(APP_NAME).app
+CLIENT_DIR    := $(HOME)/.local/state/$(BINARY)/client
+CLIENT_APP    := $(CLIENT_DIR)/$(APP_NAME).app
+NOTARIZE      ?= 1
 
 VERSION       := $(shell ./scripts/build-version.sh)
 ROLLBACK_DIR  := $(HOME)/.local/state/$(BINARY)/rollback
@@ -78,6 +85,21 @@ snapshots: ## draw the popover in every state and Settings, light and dark, offs
 	home=$$(mktemp -d) && trap 'rm -r "$$home"' EXIT && \
 	  HOME="$$home" CFFIXED_USER_HOME="$$home" $(SNAP_APP)/Contents/MacOS/WalkingPad --ui-snapshot "$(SNAP_DIR)"
 
+app-release: ## Release build of the menu bar app, Developer ID signed, notarized and stapled into CLIENT_APP (NOTARIZE=0 signs only)
+	cd apple && "$$(../$(TOOLS) xcodegen)" generate --quiet
+	$(APPLE_SLOT) xcodebuild -project apple/WalkingPad.xcodeproj -scheme WalkingPad -configuration Release \
+	  -destination 'platform=macOS' -derivedDataPath $(CLIENT_DD) CODE_SIGNING_ALLOWED=NO ARCHS=arm64 ONLY_ACTIVE_ARCH=NO \
+	  MARKETING_VERSION=$(VERSION) CURRENT_PROJECT_VERSION=$$(git rev-list --count HEAD) build
+	rm -rf "$(CLIENT_APP)" && mkdir -p "$(CLIENT_DIR)" && ditto $(CLIENT_BUILT) "$(CLIENT_APP)"
+	NOTARIZE=$(NOTARIZE) $(APPLE_SLOT) scripts/sign.sh "$(CLIENT_APP)"
+	@printf "client built  : \033[1m%s\033[0m  %s\n" "$(VERSION)" "$(CLIENT_APP)"
+
+verify-app: ## check the built menu bar app: Developer ID, Hardened Runtime, stapled, Gatekeeper (NOTARIZE=0: signature only)
+	scripts/verify-signature.sh "$(CLIENT_APP)" $(if $(filter 0,$(NOTARIZE)),--developer-id,--release)
+
+install-macbook: ## pull the built app onto the MacBook (one approval dialog): verify, host URL, token into the Keychain, relaunch
+	scripts/install-macbook.sh "$(CLIENT_APP)"
+
 test-live: ## PadKit decodes GET /status and /sessions from the live host (reads only)
 	cd $(PADKIT) && PADKIT_LIVE_URL=http://127.0.0.1:$(HTTP_PORT) swift test --filter LiveHostTests
 
@@ -126,6 +148,7 @@ rollback: ## reinstall the bundle the last deploy replaced and restart the Launc
 test: ## run all tests (Go race + Raycast typecheck)
 	./scripts/test-deploy-guard.sh
 	./scripts/test-build-app-bundle.sh
+	./scripts/test-install-macbook.sh
 	go test -race -count=1 ./...
 	cd raycast && npx tsc --noEmit
 
@@ -157,4 +180,4 @@ lint: ## run golangci-lint (pre-commit hook also runs this)
 clean: ## remove build artifacts
 	rm -rf $(BIN_DIR) coverage.out apple/.dd apple/.dd-snap apple/.snapshots apple/WalkingPad.xcodeproj $(PADKIT)/.build
 
-.PHONY: help check check-fast check-apple lint-swift test-swift snapshots test-live contracts up deploy version rollback test verify logs scan fmt lint clean
+.PHONY: help check check-fast check-apple app-release verify-app install-macbook lint-swift test-swift snapshots test-live contracts up deploy version rollback test verify logs scan fmt lint clean

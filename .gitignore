@@ -42,6 +42,7 @@ raycast/.raycast/
 /apple/WalkingPad.xcodeproj/
 /apple/.dd/
 /apple/.dd-snap/
+/apple/.dd-release/
 /apple/.snapshots/
 /apple/Packages/*/.build/
 /apple/Packages/*/.swiftpm/
