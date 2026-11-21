@@ -136,7 +136,7 @@ apple/Packages/PadKit/                   # API models, HTTP client, PadStore (po
   The host URL and start speed live in UserDefaults (`-hostURL <url>` overrides the URL for one run),
   the token in the Keychain. Hotkeys are KeyboardShortcuts, pinned exactly in `apple/project.yml`.
 - **Release and install:** `make app-release` signs (Developer ID), notarizes and staples the app, `make install-macbook`
-  pulls it onto the MacBook. Both hold the Apple lock and notarization can queue for hours: read `docs/app-install.md` before
+  pulls it onto the MacBook. `app-release` holds the Apple lock and notarization can queue for hours: read `docs/app-install.md` before
   running either, and run `app-release` in the background with its exit code in a log.
 - `make snapshots` builds the app with `SNAPSHOT_HARNESS` (own derived data `apple/.dd-snap`) and draws
   the popover in every `PadPhase`, Settings and the History window (`history-*`), light and dark, offscreen

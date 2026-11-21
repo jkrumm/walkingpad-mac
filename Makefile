@@ -178,6 +178,6 @@ lint: ## run golangci-lint (pre-commit hook also runs this)
 	golangci-lint run ./...
 
 clean: ## remove build artifacts
-	rm -rf $(BIN_DIR) coverage.out apple/.dd apple/.dd-snap apple/.snapshots apple/WalkingPad.xcodeproj $(PADKIT)/.build
+	rm -rf $(BIN_DIR) coverage.out apple/.dd apple/.dd-snap apple/.dd-release apple/.snapshots apple/WalkingPad.xcodeproj $(PADKIT)/.build
 
 .PHONY: help check check-fast check-apple app-release verify-app install-macbook lint-swift test-swift snapshots test-live contracts up deploy version rollback test verify logs scan fmt lint clean

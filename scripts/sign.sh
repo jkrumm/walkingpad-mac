@@ -63,13 +63,16 @@ auth=(--key "$ASC_KEY_FILE" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID")
 timeout="${NOTARY_TIMEOUT:-40m}"
 
 # A wait exits 0 on an Invalid verdict, so the status is read from the JSON.
-if [[ -n "$resume_id" ]]; then
-  result="$("${notary[@]}" wait "$resume_id" "${auth[@]}" --timeout "$timeout" --output-format json || true)"
-else
+# The id is printed before the wait, so a timeout or a killed run still leaves the resume command.
+submission="$resume_id"
+if [[ -z "$submission" ]]; then
   ditto -c -k --sequesterRsrc --keepParent "$app" "$work/notarize.zip"
-  result="$("${notary[@]}" submit "$work/notarize.zip" "${auth[@]}" --wait --timeout "$timeout" --output-format json || true)"
+  submitted="$("${notary[@]}" submit "$work/notarize.zip" "${auth[@]}" --output-format json)" || fail "notarytool submit failed"
+  submission="$(jq -r '.id // empty' <<<"$submitted" 2>/dev/null || true)"
+  [[ -n "$submission" ]] || fail "notarytool submit returned no submission id"
+  echo "notarytool: submitted id=$submission; to continue without re-signing: RESUME_NOTARY_ID=$submission NOTARIZE=1 scripts/sign.sh $app" >&2
 fi
-submission="${resume_id:-$(jq -r '.id // empty' <<<"$result" 2>/dev/null || true)}"
+result="$("${notary[@]}" wait "$submission" "${auth[@]}" --timeout "$timeout" --output-format json || true)"
 status="$(jq -r '.status // empty' <<<"$result" 2>/dev/null || true)"
 echo "notarytool: id=${submission:-unknown} status=${status:-unknown}"
 if [[ "$status" != "Accepted" ]]; then

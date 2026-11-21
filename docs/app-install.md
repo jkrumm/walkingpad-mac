@@ -15,5 +15,5 @@ the script prints the submission id; `RESUME_NOTARY_ID=<id> NOTARIZE=1 scripts/s
 rsync from the mini, signature, staple, Gatekeeper and version checks, host URL into UserDefaults, the remote token
 (`walkingpad token`) into the login Keychain with the app trusted, relaunch. The token travels ssh stdout to a shell variable
 to `security -i` stdin: never in the dialog, argv, output or a file. The door URL is in no tracked file: it is read from
-`WALKINGPAD_HOST_URL` or `~/.local/state/walkingpad/door-url`. Test: `scripts/test-install-macbook.sh`. Never send a belt
+`WALKINGPAD_HOST_URL` or `~/.local/state/walkingpad/door-url`. The keychain unlock and the Developer ID lookup in `scripts/apple-credentials.sh` are deliberately separate from `scripts/build-app-bundle.sh` (the daemon bundle falls back to ad-hoc, a release must fail closed). Test: `scripts/test-install-macbook.sh`. Never send a belt
 command to prove an install; the owner does the first live start.
