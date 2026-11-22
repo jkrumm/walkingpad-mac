@@ -46,4 +46,5 @@ targets:
         INFOPLIST_KEY_CFBundleDisplayName: WalkingPad
         INFOPLIST_KEY_LSUIElement: YES
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.healthcare-fitness
-        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+        # The walker mark: apple/branding/AppIcon.icns split into the sizes of this asset catalog.
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
