@@ -145,7 +145,12 @@ rollback: ## reinstall the bundle the last deploy replaced and restart the Launc
 	@sleep 1
 	@printf "daemon live   : %s\n" "$$($(MAKE) --no-print-directory version 2>/dev/null || echo '(no /health response yet)')"
 
-test: ## run all tests (Go race + Raycast typecheck)
+# The Raycast typecheck needs its devDependencies, and a fresh checkout has no node_modules. CI runs the
+# same install before make check, so the rule is a no-op there.
+raycast/node_modules: raycast/package-lock.json raycast/package.json
+	npm ci --prefix raycast
+
+test: raycast/node_modules ## run all tests (Go race + Raycast typecheck)
 	./scripts/test-deploy-guard.sh
 	./scripts/test-build-app-bundle.sh
 	./scripts/test-install-macbook.sh
