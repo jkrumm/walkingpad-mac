@@ -146,11 +146,13 @@ rollback: ## reinstall the bundle the last deploy replaced and restart the Launc
 	@printf "daemon live   : %s\n" "$$($(MAKE) --no-print-directory version 2>/dev/null || echo '(no /health response yet)')"
 
 # The Raycast typecheck needs its devDependencies, and a fresh checkout has no node_modules. CI runs the
-# same install before make check, so the rule is a no-op there.
-raycast/node_modules: raycast/package-lock.json raycast/package.json
+# same install before make check, so the rule is a no-op there. The stamp is written only after npm ci
+# succeeds: npm ci wipes node_modules first, so a directory's mtime cannot say the install finished.
+raycast/node_modules/.make-installed: raycast/package-lock.json raycast/package.json
 	npm ci --prefix raycast
+	touch $@
 
-test: raycast/node_modules ## run all tests (Go race + Raycast typecheck)
+test: raycast/node_modules/.make-installed ## run all tests (Go race + Raycast typecheck)
 	./scripts/test-deploy-guard.sh
 	./scripts/test-build-app-bundle.sh
 	./scripts/test-install-macbook.sh
