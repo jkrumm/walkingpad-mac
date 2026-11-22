@@ -1,194 +1,235 @@
 # walkingpad-mac
 
-_Formerly `king-smith-walkingpad-mac` (renamed 2026-11-20)._
+_Formerly `king-smith-walkingpad-mac`, renamed 2026-11-20._
 
-A macOS daemon and Raycast extension for the KingSmith **WalkingPad P1**. Control the belt, track every session, own your data.
+Control and record a KingSmith **WalkingPad P1** treadmill from a Mac. A Go host on the Mac mini holds the Bluetooth link and the session history. A Swift menu bar app on the MacBook controls the belt and shows the history.
 
-> **Status:** shipped, running under launchd on the Mac mini since July, with Argo sync
-> live and the Raycast extension in daily use. Hardware tested: WalkingPad P1 on macOS 26
-> (Apple Silicon).
+This is a personal tool, built and run by one person for one pad. The P1 speaks the WiLink protocol. That is the only model verified here. The source is public for reading, and for anyone with another pad: see [Other pads](#other-pads) before you start.
 
-## Why
+## What runs where
 
-The official KS Fit app and the hardware remote are fine for casual use, but they leave nothing behind: no machine-readable history, no desktop control surface, no way to plug walking data into a personal dashboard. This project gives you all three.
+| Part | Runs on | Role |
+|-|-|-|
+| Host, `walkingpad` (Go) | Mac mini, LaunchAgent `com.jkrumm.walkingpad` | Owns the BLE link. Records sessions in SQLite. Serves the HTTP API on loopback. Syncs closed sessions to Argo. |
+| Menu bar app, `WalkingPad.app` (`apple/`, Swift) | MacBook | Live speed, time and distance in the menu bar. Popover with start, stop and speed. Global hotkeys. History with charts. Talks to the host over HTTP only. |
+| Raycast extension (`raycast/`) | Mac mini | The earlier controller. Reads the loopback API, so it works only where the host runs. Scheduled for removal once the app has run for 30 days. |
 
-- **Live control from Raycast** — start, stop, change speed without bending down to the remote.
-- **Menu-bar status** — current speed, distance, time, steps glanceable from anywhere on macOS.
-- **Local-first history** — every session in a local SQLite database. Offline-tolerant. Yours forever.
-- **Optional sync** to a private API (Argo, in this author's case) for dashboards and downstream agents.
+```
+MacBook                                 Mac mini                 Pad
+WalkingPad.app ──HTTPS──▶ TLS proxy ──▶ Go host ──BLE──▶ P1
+                          (tailnet)        ├─▶ SQLite (source of truth)
+                                           └─▶ Argo (optional)
+```
 
-Explicit non-goals: no Garmin upload (Garmin Connect can't update the watch's daily step count from manual activities — start "Indoor Walking" on the watch if you want that), no Apple Health export in v1, no FTMS support (P1 doesn't speak it).
-
-## Features
-
-- BLE control: start, stop, set speed (0.5–6.0 km/h), set default start-speed.
-- Auto-reconnect on Bluetooth drops with exponential backoff.
-- Smart session grouping: pauses up to 15 minutes (coffee, bathroom) stay in the same session; longer gaps start a new one.
-- Live telemetry at ~1 Hz: speed, distance, steps, belt state.
-- Calorie computation client-side using a MET formula (configurable body weight).
-- Local SQLite store at `~/Library/Application Support/WalkingPad/db.sqlite`.
-- Loopback HTTP API on `127.0.0.1:7706`.
-- Raycast extension: menu bar + commands for start/stop/speed/history.
-- Optional sync to a personal API (Argo).
-
-## Where it runs
-
-**Mac mini only.** CoreBluetooth needs the pad within BLE range, and the mini is the
-always-on machine standing next to it — the daemon, its LaunchAgent and `make up` live
-there, and the mini's dev-host health check probes `GET /status`. The Raycast extension's
-**Daemon URL** preference defaults to the loopback `http://127.0.0.1:7706`, so it drives the
-pad from the mini; the API binds loopback only and is not reachable from another machine.
+The host process is the only Bluetooth client, and the app owns no database. The HTTP API is the only seam between them. The design and its open choices are in [docs/spec.md](docs/spec.md).
 
 ## Requirements
 
 | | |
 |-|-|
-| Hardware | KingSmith WalkingPad P1 (or any WiLink-protocol model: A1, A1 Pro, C1, C2) |
-| OS | macOS 11+ on Apple Silicon or Intel |
-| Go | 1.26 or newer (`brew install go`) |
-| Make | macOS default |
-| Raycast | optional but recommended (`brew install raycast`) |
-| Node | optional, only for Raycast dev (`brew install node`) |
+| Pad | KingSmith WalkingPad P1 |
+| Host | Mac within Bluetooth range of the pad. Go 1.26 or newer to build. Tested on macOS 26, Apple Silicon. The bundle declares macOS 11 as its minimum. |
+| Menu bar app | macOS 26 (the deployment target in `apple/project.yml`). Xcode to build it. `scripts/tools.sh` pins xcodegen and the Swift linters. |
+| Raycast extension | Node 22.22.2 (`raycast/.nvmrc`), and only for `make up` or developing the extension. |
 
-## Install
+## Install the host
+
+On the mini, from a clone:
 
 ```bash
 git clone https://github.com/jkrumm/walkingpad-mac.git
 cd walkingpad-mac
-make up
+make deploy
+make version
+make verify
 ```
 
-`make up` does everything:
+`make deploy` builds the binary with the commit sha stamped in and wraps it in `WalkingPad.app`. macOS denies Bluetooth to a bare binary, so the wrapper is required. It then:
 
-1. Builds the Go binary.
-2. Wraps it into `WalkingPad.app` (required — macOS denies Bluetooth access to bare CLI binaries).
-3. Copies the `.app` to `/Applications/`.
-4. Installs and starts the LaunchAgent at `~/Library/LaunchAgents/com.jkrumm.walkingpad.plist` (only on first run; subsequent runs just kickstart it).
-5. Hits `/health` and prints `daemon source` vs `daemon live` so the version match is obvious.
-6. Starts the Raycast dev loop (`ray develop`).
+1. Refuses unless the belt is stopped or in standby, so a restart never cuts a walk. `FORCE=1` overrides. If `/status` does not answer, it proceeds.
+2. Keeps the bundle it replaces in `~/.local/state/walkingpad/rollback/`.
+3. Installs `/Applications/WalkingPad.app`, installs the LaunchAgent on first run, and restarts it.
 
-The first run will prompt macOS to grant Bluetooth permission. Accept the prompt. If you miss it, grant it manually in **System Settings → Privacy & Security → Bluetooth**.
+`make version` prints the live sha. `make verify` exits non-zero when `/health` does not answer. To go back one version, run `make rollback`.
 
-Re-run `make up` after every code change. It's the only command you need for the dev loop. The Raycast portion requires Node ≥22.22.2 (pinned in `raycast/.nvmrc`); if you don't have it the daemon still deploys and `make up` exits early with a friendly nudge.
+On the first run macOS asks for Bluetooth access. Allow it. If the prompt was missed, grant it under **System Settings → Privacy & Security → Bluetooth**.
+
+Signing: with a Developer ID identity in the keychain, the bundle keeps its Bluetooth grant across rebuilds. Without one it is ad-hoc signed, and macOS asks again after every rebuild. `SIGN_IDENTITY=-` forces ad-hoc.
+
+`make up` runs `make deploy` and then starts the Raycast dev loop. Use it only when you work on the extension.
+
+## Install the menu bar app
+
+The app is built, signed and notarized on the mini, then copied to the MacBook. It needs the host URL and the remote token from [Remote listener and token](#remote-listener-and-token).
+
+```bash
+make app-release   # Release build, Developer ID, notarized, stapled
+make verify-app    # signature, Hardened Runtime, staple, Gatekeeper
+make install-macbook
+```
+
+`make app-release` holds the Apple build lock. Notarization can queue for up to 40 minutes, so run it in the background and read its log. `make install-macbook` runs on the mini. After you approve a dialog, it copies the bundle to `~/Applications/WalkingPad.app` on the MacBook, checks the signature, writes the host URL and token into the app, and relaunches it. The full procedure and its failure modes are in [docs/app-install.md](docs/app-install.md).
+
+Without the dialog, copy the bundle yourself and enter the host URL and the token in Settings.
 
 ## Configuration
 
-Edit `~/Library/Application Support/WalkingPad/config.toml`:
+The host reads `~/Library/Application Support/WalkingPad/config.toml`. A missing file means defaults. `walkingpad config` prints the effective values with tokens redacted.
 
 ```toml
 [device]
-address = ""             # optional BLE address pin — leave empty to auto-discover
+address = ""                  # BLE address pin; empty discovers the pad
 
 [daemon]
-http_port = 7706
-# remote_port = 0        # >0 adds a second listener on 127.0.0.1 that always requires a bearer token
-log_level = "info"       # debug | info | warn | error
+http_port = 7706              # loopback API
+poll_interval_ms = 1000       # 1000 at least: the pad drops frames above 1 Hz
+log_level = "info"            # debug | info | warn | error
+# remote_port = 7708          # >0 starts the token-guarded listener, see below
 
 [session]
-gap_minutes = 15
-resume_within_seconds = 60
+gap_minutes = 15              # a pause longer than this starts a new session
+resume_within_seconds = 60    # a BLE drop shorter than this resumes the session
+min_duration_seconds = 300    # standalone sessions shorter than this are discarded; 0 keeps all
 
 [body]
-weight_kg = 80.0         # used for calorie computation
+weight_kg = 80.0              # input to the MET calorie estimate
 
 [argo]
-url = ""                 # leave empty to disable Argo sync
-# token = "Bearer …"
+url = ""                      # the default points at the author's Argo API
+token = ""                    # sync runs only with a token; KSWP_ARGO_TOKEN overrides
 ```
 
-The remote listener (`remote_port`) is for a TLS-terminating reverse proxy on the same host. Its token is `remote_token` (or `KSWP_REMOTE_TOKEN`), else a generated `remote-token` file in the data directory; `walkingpad token` prints it. The local listener keeps its optional `http_token`; see [docs/protocol.md](docs/protocol.md) section 8.
+`argo.url` defaults to the author's Argo API. Without `argo.token`, the host sends nothing to Argo; `KSWP_ARGO_TOKEN` overrides the token. Sessions stay in the local database, and the app and Raycast still control the belt.
 
-All fields optional. Without `argo.url` set, sessions stay local — you still get full control and history, just no remote sync.
+### Remote listener and token
 
-After editing, redeploy the daemon:
+The API listens on `127.0.0.1` only. With `remote_port` set, a second loopback listener starts. It answers 401 on every route, `/health` included, unless the request carries `Authorization: Bearer <token>`.
+
+The token comes from `remote_token` in the config, else `KSWP_REMOTE_TOKEN`, else the generated file `remote-token` in the data directory. `walkingpad token` prints it. Keep it out of tracked files.
+
+Put a TLS reverse proxy in front and make it reachable over your tailnet only. Never publish the port. Check it with reads:
 
 ```bash
-make up
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:<remote-port>/status    # 401
+curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $(walkingpad token)" http://127.0.0.1:<remote-port>/status  # 200
 ```
 
 ## Usage
 
-### From Raycast
+### Menu bar app
 
-- **Menu bar** — always-on glanceable status. `▶ 4.5 · 12:34 · 1.20 km` while walking; `■ idle · today 5.43 km` between sessions.
-- **Start / Stop** — quick keyboard commands.
-- **Set Speed** — form with current speed pre-filled.
-- **Today's Sessions** — list of today's walks with totals.
-- **History** — full searchable history with per-session detail panels.
+- **Menu bar:** speed, time and distance while the belt moves.
+- **Popover:** belt state, speed up and down, start or stop, this walk and today's totals. Links to History and Settings.
+- **Settings:** host URL and token (token in the Keychain), start speed (also saved on the pad), and the three global hotkeys: start or stop, faster, slower.
+- **History:** totals for the week and the month, distance per day for 30 or 90 days, and the walks of each day.
 
-### From the CLI (development & debugging)
+![Popover while walking](docs/images/popover-active-light.png)
+
+![History, 30 days](docs/images/history-30-light.png)
+
+![Settings](docs/images/settings-light.png)
+
+These screenshots come from `make snapshots`, which draws every state against an in-memory host.
+
+### Raycast
+
+Commands: WalkingPad (menu bar), Controller, History, Set Speed, Speed Up, Speed Down, Start or Stop. The preferences set the daemon URL (default `http://127.0.0.1:7706`), the API token, the speed step and the default start speed.
+
+### CLI
 
 ```bash
-./bin/walkingpad scan          # list nearby WalkingPad devices
-./bin/walkingpad connect       # connect, stream live frames, exit on Ctrl-C
-./bin/walkingpad status        # query running daemon's status
-./bin/walkingpad serve         # foreground daemon (what the LaunchAgent runs)
+./bin/walkingpad scan       # nearby WalkingPad devices (BLE)
+./bin/walkingpad config     # effective configuration, tokens redacted
+./bin/walkingpad token      # the remote listener's token
+./bin/walkingpad version
+./bin/walkingpad connect    # its own BLE link, streams frames; debugging only
+./bin/walkingpad serve      # the foreground daemon, what the LaunchAgent runs
 ```
 
-### From the HTTP API
+The pad accepts one Bluetooth client. Run `connect` or `serve` only while the LaunchAgent is stopped. `launchctl bootout gui/$(id -u)/com.jkrumm.walkingpad` stops it. `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.jkrumm.walkingpad.plist` starts it again.
+
+### HTTP API
 
 ```bash
 curl http://127.0.0.1:7706/status
-curl -X POST http://127.0.0.1:7706/start -d '{"speed_kmh":3.5}'
-curl -X POST http://127.0.0.1:7706/speed  -d '{"speed_kmh":4.5}'
-curl -X POST http://127.0.0.1:7706/stop
-curl http://127.0.0.1:7706/sessions?limit=10
-curl http://127.0.0.1:7706/summary?period=week
+curl "http://127.0.0.1:7706/sessions?limit=10"
+curl "http://127.0.0.1:7706/summary?period=week"     # today | week | month | all
+curl "http://127.0.0.1:7706/summary/days?from=2026-11-01&to=2026-11-22"
 ```
 
-Full API contract (endpoints, response shapes) in [`docs/protocol.md`](docs/protocol.md) §8.
+| Method and path | Purpose |
+|-|-|
+| `GET /health` | Version. The loopback listener needs no token; the remote listener requires one on every route. |
+| `GET /status` | Belt state, speed, distance, connection |
+| `POST /start` | Body `{"speed_kmh": 3.5}` optional. Waits about 4 to 5 s for the 3-2-1 ramp, then sets the speed. |
+| `POST /stop`, `POST /speed` | Stop; set speed in `0.5`–`6.0` km/h. Speed returns 503 when the pad is not connected. |
+| `POST /pref/start-speed` | Start speed saved on the pad |
+| `GET /sessions`, `GET /sessions/{uuid}` | Session list (`limit`, `before`) and one session |
+| `GET /summary`, `GET /summary/days` | Totals per period; per day for a range of at most 366 days |
+| `POST /sync/argo` | Sync now. Returns 503 without a token. |
+
+`POST /start`, `POST /stop` and `POST /speed` move the belt. Do not send them to test anything. The full contract, with response shapes, is in [docs/protocol.md](docs/protocol.md) section 8.
 
 ## Architecture
 
-A single Go process owns the BLE link (CoreBluetooth permits only one GATT connection per peripheral) and exposes everything else over a loopback HTTP API. Raycast and any other consumer talks to the API, never to the device directly.
+One Go process owns the BLE link. CoreBluetooth allows one connection per peripheral. Every other consumer talks HTTP.
 
-```
-Raycast extension ─HTTP→ Go daemon ─BLE→ WalkingPad P1
-                              │
-                              ├─→ SQLite (local source of truth)
-                              └─→ Argo API (optional, async sync)
-```
+- **Session grouping:** pauses up to `gap_minutes` stay in one session. A drop shorter than `resume_within_seconds` resumes it.
+- **Argo sync:** closed sessions upload every 60 s, and at startup the host reconciles orphans. While a session is open, the host pushes a live snapshot to Argo once per second.
+- **Storage:** `~/Library/Application Support/WalkingPad/db.sqlite`. Closed sessions are marked as synced after upload.
 
-See [`docs/protocol.md`](docs/protocol.md) for the BLE protocol spec, SQLite schema and
-session-grouping logic.
+The BLE protocol, the schema and the grouping rules are in [docs/protocol.md](docs/protocol.md). The BLE gotchas that fail silently are in [internal/AGENTS.md](internal/AGENTS.md).
 
 ## Troubleshooting
 
-| Symptom | Cause / fix |
+| Symptom | Cause and fix |
 |-|-|
-| `make scan` finds no devices | macOS Bluetooth permission. Check **System Settings → Privacy & Security → Bluetooth**. The `.app` must be listed and enabled. |
-| Daemon connects but no status frames | Device is in standby. Press a button on the remote to wake it, then retry. |
-| "Address already in use" | Another instance of the daemon is running. `launchctl unload ~/Library/LaunchAgents/com.jkrumm.walkingpad.plist && make up`. |
-| Belt ignores speed commands | Wire format is `speed × 10` — bug in your custom client. Use the API. |
-| Sessions don't show up in Argo | Check `[argo]` config and `make logs`. Sync runs every 30 min plus on each session close; manual trigger: `curl -X POST http://127.0.0.1:7706/sync/argo`. |
-| BLE drops mid-session | Auto-reconnect kicks in for 60 s. Longer drops close the session at the drop time. Tune `[session].resume_within_seconds`. |
+| `make scan` finds nothing | Bluetooth permission for `WalkingPad.app` is missing or off. Check **System Settings → Privacy & Security → Bluetooth**. |
+| Daemon runs, no status frames | The pad is in standby. Press a button on the remote, then retry. |
+| `address already in use` on 7706 | Another process holds the port. `lsof -nP -iTCP:7706 -sTCP:LISTEN` shows it. Restart the agent with `launchctl kickstart -k gui/$(id -u)/com.jkrumm.walkingpad`. |
+| `make deploy` refuses | The belt is not stopped or in standby. Wait for the walk to end, or `FORCE=1 make deploy` if a restart is acceptable. |
+| Speed command has no effect | The pad drops a speed set while it is stopped or ramping. Set the speed with `POST /start`, or send `POST /speed` while the belt is active. |
+| Sessions missing in Argo | Check `[argo]` in the config and `make logs` for `sync.*` lines. Closed sessions upload on the sync interval (see Architecture). `POST /sync/argo` forces a run. |
+| Session split by a BLE drop | Drops longer than `resume_within_seconds` close the session at the drop time. Tune `[session]`. |
+| App shows unconfigured or unreachable | Enter the host URL and token in Settings. The host must answer on that URL from the MacBook. |
 
 ## Development
 
 ```bash
-make            # default — show the menu
-make up         # rebuild daemon + deploy + start Raycast dev (the only command you need)
-make test       # go test -race + raycast tsc --noEmit
-make check-fast # Go, Raycast and Swift lint + tests, no Xcode build
-make check      # check-fast + the Xcode build of the Swift app (what CI runs)
-make contracts  # rewrite contracts/fixtures after an intended API change
-make logs       # tail ~/Library/Logs/walkingpad.log
-make lint       # golangci-lint
-make fmt        # gofmt + go mod tidy + swift format
-make scan       # BLE device discovery (dev tool)
-make clean      # remove ./bin
+make              # the target list
+make check-fast   # gofmt, vet, golangci-lint, Go and Raycast tests, Swift lint and tests; no Xcode
+make check        # check-fast plus the Xcode build of the app (CI runs this)
+make test         # Go race tests and Raycast typecheck
+make snapshots    # draw the popover, Settings and History in every state, light and dark
+make contracts    # rewrite contracts/fixtures after an intended API change
+make logs         # bounded tail of the daemon logs; no follow mode
+make fmt          # gofmt, go mod tidy, swift format
+make scan         # BLE discovery (dev tool)
+make clean        # remove ./bin
 ```
 
-Read [`AGENTS.md`](./AGENTS.md) before extending, and [`internal/AGENTS.md`](./internal/AGENTS.md) before touching the Go host: it captures the non-obvious BLE gotchas (rate limit, CRC scope, `.app` bundle requirement, etc.).
+Read [AGENTS.md](AGENTS.md) before changing anything, [internal/AGENTS.md](internal/AGENTS.md) before touching the Go host, and [apple/AGENTS.md](apple/AGENTS.md) before touching the app.
 
-## Credits
+## Other pads
 
-This project would not exist without the reverse-engineering work of:
+Only the P1 is verified here. For another model, first find out which protocol it speaks, then pick from these projects:
 
-- [**ph4r05/ph4-walkingpad**](https://github.com/ph4r05/ph4-walkingpad) — the canonical Python reference implementation. All protocol knowledge ultimately traces back here.
-- [**tim-oster/walkingpad**](https://github.com/tim-oster/walkingpad) — Go desktop controller, explicitly verified on the P1 and macOS Apple Silicon. The build-script template for the `.app` bundle is adapted from this project.
-- [**mcdax/walkingpad-controller**](https://github.com/mcdax/walkingpad-controller) — unified WiLink + FTMS Python wrapper with the most complete protocol documentation in `docs/`.
+| Project | Covers | License |
+|-|-|-|
+| [ph4r05/ph4-walkingpad](https://github.com/ph4r05/ph4-walkingpad) | Python reference for the WiLink protocol. This repo's protocol notes trace back to it. | MIT |
+| [mcdax/walkingpad-controller](https://github.com/mcdax/walkingpad-controller) | WiLink and FTMS in one Python wrapper, with the most complete protocol notes | MIT |
+| [tim-oster/walkingpad](https://github.com/tim-oster/walkingpad) | Go desktop controller, verified on the P1 on Apple Silicon. The app bundle template comes from it. | MIT |
+| [Palmetto-Interactive-LLC/boardwalk](https://github.com/Palmetto-Interactive-LLC/boardwalk) | Mac app for FTMS under-desk treadmills: on, off, faster, slower | MIT |
+| [k0siara/walkingpad-macos](https://github.com/k0siara/walkingpad-macos) | SwiftUI menu bar remote for WalkingPad and Kingsmith treadmills | none declared |
+| [klassm/walkingpad_macos_client](https://github.com/klassm/walkingpad_macos_client) | Status bar app for Kingsmith WalkingPads. Last published 2022. | Apache-2.0 |
+| [fortun8te/z1-walkingpad](https://github.com/fortun8te/z1-walkingpad), [slandau3/z1-walkingpad-mcp](https://github.com/slandau3/z1-walkingpad-mcp) | Z1 model: FTMS behind a vendor handshake, with a menu bar app and an MCP server | MIT (both) |
+
+Closed source, for comparison: **WalkingMate** by Raine Virta, a Mac App Store app for menu bar control, keyboard shortcuts and workout tracking, with an iOS companion for Apple Health. Listed at `$4.99` when checked. [App Store listing](https://apps.apple.com/us/app/walkingmate/id6754256683?mt=12), [product page](https://walkingmate.zendit.fi/).
+
+## Non-goals
+
+No Garmin upload: Garmin Connect cannot change the watch's daily step count from manual activities. Start "Indoor Walking" on the watch if you want that. No Apple Health export and no FTMS support in this project. The P1 does not speak FTMS.
 
 ## License
 
-[AGPL-3.0](./LICENSE).
+[AGPL-3.0](LICENSE).
