@@ -26,6 +26,14 @@ Loaded when a file under `apple/` is read. Paths are from the repo root. Parent:
 - Settings is a `Window` scene, never the `Settings` scene (an accessory app cannot bring it forward).
   The host URL and start speed live in UserDefaults (`-hostURL <url>` overrides the URL for one run),
   the token in the Keychain. Hotkeys are KeyboardShortcuts, pinned exactly in `apple/project.yml`.
+- Launch at login is never a disabled toggle: `SMAppService.mainApp` reports `notFound` for an app that has not
+  registered yet, so the toggle always tries `register()` and shows the result or the error (`LoginItemState` in PadKit).
+- KeyboardShortcuts writes a Name's `initial:` shortcut into UserDefaults on first read, so changing a default reaches no
+  existing install: `HotkeyDefaults.migrate` moves a stored shortcut that still equals the old default, once. It drops a
+  failed Carbon registration silently; Settings reads `KeyboardShortcuts.isEnabled(for:)` to warn (the snapshot build runs no
+  listener and skips it). The menu bar title's values are `MenuBarValues` (PadKit, UserDefaults `menuBarValues`).
+- The app icon is `apple/branding/AppIcon.icns` split into `apple/WalkingPad/Assets.xcassets/AppIcon.appiconset`
+  (`iconutil -c iconset`); never redraw the mark.
 - **Release and install:** `make app-release` signs (Developer ID), notarizes and staples the app, `make install-macbook`
   pulls it onto the MacBook. `app-release` holds the Apple lock and notarization can queue for hours: read `docs/app-install.md` before
   running either, and run `app-release` in the background with its exit code in a log.

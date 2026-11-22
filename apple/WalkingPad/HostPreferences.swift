@@ -9,6 +9,7 @@ struct HostPreferences {
   private enum Key {
     static let hostURL = "hostURL"
     static let startSpeed = "startSpeed"
+    static let menuBarValues = "menuBarValues"
   }
 
   let defaults: UserDefaults
@@ -24,6 +25,13 @@ struct HostPreferences {
       return stored == 0 ? SpeedRange.defaultStartSpeed : SpeedRange.clamp(stored)
     }
     nonmutating set { defaults.set(newValue, forKey: Key.startSpeed) }
+  }
+
+  /// What the menu bar title shows; every value until the user turns one off. An empty choice is
+  /// stored as 0 and stays empty.
+  var menuBarValues: MenuBarValues {
+    get { (defaults.object(forKey: Key.menuBarValues) as? Int).map(MenuBarValues.init) ?? .all }
+    nonmutating set { defaults.set(newValue.rawValue, forKey: Key.menuBarValues) }
   }
 }
 
@@ -79,10 +87,6 @@ struct KeychainTokenStore: TokenStore {
   }
 }
 
-enum LoginItemState: Equatable {
-  case enabled, requiresApproval, disabled, unavailable
-}
-
 /// Launch at login, behind a port so the snapshot build never registers the app.
 protocol LoginItemControlling {
   func state() -> LoginItemState
@@ -110,8 +114,8 @@ struct SMAppServiceLoginItem: LoginItemControlling {
     case .enabled: .enabled
     case .requiresApproval: .requiresApproval
     case .notRegistered: .disabled
-    case .notFound: .unavailable
-    @unknown default: .unavailable
+    case .notFound: .notFound
+    @unknown default: .notFound
     }
   }
 }

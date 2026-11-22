@@ -3,7 +3,7 @@ import Observation
 import PadKit
 
 /// What the Settings window edits: the host connection (URL in UserDefaults, token in the
-/// Keychain), the default start speed and launch at login.
+/// Keychain), the default start speed, what the menu bar shows and launch at login.
 @MainActor
 @Observable
 final class SettingsModel {
@@ -16,6 +16,7 @@ final class SettingsModel {
   private(set) var startSpeedNote: String?
   private(set) var loginItem: LoginItemState
   private(set) var loginItemError: String?
+  private(set) var menuBarValues: MenuBarValues
 
   let store: PadStore
   @ObservationIgnored private let preferences: HostPreferences
@@ -51,6 +52,7 @@ final class SettingsModel {
     savedToken = token
     startSpeed = preferences.startSpeed
     self.loginItem = loginItem.state()
+    menuBarValues = preferences.menuBarValues
   }
 
   /// The URL or the token differ from what the store uses.
@@ -111,12 +113,29 @@ final class SettingsModel {
     }
   }
 
+  /// Shows or hides one value in the menu bar title.
+  func setMenuBar(_ value: MenuBarValues, shown: Bool) {
+    if shown {
+      menuBarValues.insert(value)
+    } else {
+      menuBarValues.remove(value)
+    }
+    preferences.menuBarValues = menuBarValues
+  }
+
+  /// Always tries: macOS answers `notFound` for an app that has not registered yet, so the state
+  /// read before the click says nothing. The toggle then shows what macOS reports, and a refusal
+  /// is written under it.
   func setLaunchAtLogin(_ enabled: Bool) {
     loginItemError = nil
     do {
       loginItem = try loginItems.setEnabled(enabled)
+      if enabled, !loginItem.isOn {
+        loginItemError = "macOS did not register WalkingPad as a login item."
+      }
     } catch {
-      loginItemError = error.localizedDescription
+      let verb = enabled ? "switch on" : "switch off"
+      loginItemError = "Could not \(verb) launch at login: \(error.localizedDescription)"
       loginItem = loginItems.state()
     }
   }

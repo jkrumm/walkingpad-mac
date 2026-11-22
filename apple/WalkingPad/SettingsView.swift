@@ -1,12 +1,16 @@
 import KeyboardShortcuts
 import PadKit
+import ServiceManagement
 import SwiftUI
 
-/// The Settings window: host connection, start speed, hotkeys, launch at login.
+/// The Settings window: host connection, start speed, hotkeys, menu bar values, launch at login.
 struct SettingsView: View {
   static let windowID = "settings"
 
   @Bindable var model: SettingsModel
+  /// Whether to ask KeyboardShortcuts which shortcuts could not be registered; the snapshot build
+  /// runs no hotkey listener, so it would flag every one.
+  var checksHotkeys = true
 
   var body: some View {
     Form {
@@ -33,22 +37,32 @@ struct SettingsView: View {
           .font(.caption)
           .foregroundStyle(.secondary)
       }
-      Section("Hotkeys") {
-        KeyboardShortcuts.Recorder("Start or stop", name: .toggleBelt)
-        KeyboardShortcuts.Recorder("Faster", name: .speedUp)
-        KeyboardShortcuts.Recorder("Slower", name: .speedDown)
+      HotkeySection(checks: checksHotkeys)
+      Section {
+        MenuBarToggle(model: model, value: .speed, title: "Speed")
+        MenuBarToggle(model: model, value: .time, title: "Time")
+        MenuBarToggle(model: model, value: .distance, title: "Distance")
+        MenuBarToggle(model: model, value: .steps, title: "Steps")
+      } header: {
+        Text("Menu bar")
+      } footer: {
+        Text(
+          "Shown while walking. When the belt stands, the title shows today's distance and steps."
+        )
+        .font(.caption)
+        .foregroundStyle(.secondary)
       }
       Section("General") {
         Toggle(
           "Launch at login",
           isOn: Binding(
-            get: { model.loginItem == .enabled || model.loginItem == .requiresApproval },
-            set: { model.setLaunchAtLogin($0) })
+            get: { model.loginItem.isOn }, set: { model.setLaunchAtLogin($0) })
         )
-        .disabled(model.loginItem == .unavailable)
+        if let note = model.loginItem.note {
+          Text(note).font(.caption).foregroundStyle(.secondary)
+        }
         if model.loginItem == .requiresApproval {
-          Text("Allow WalkingPad in System Settings › General › Login Items.")
-            .font(.caption).foregroundStyle(.secondary)
+          Button("Open Login Items…") { SMAppService.openSystemSettingsLoginItems() }
         }
         if let error = model.loginItemError {
           Text(error).font(.caption).foregroundStyle(.red)
@@ -58,6 +72,71 @@ struct SettingsView: View {
     .formStyle(.grouped)
     .frame(width: 460)
     .fixedSize(horizontal: false, vertical: true)
+  }
+}
+
+private struct MenuBarToggle: View {
+  @Bindable var model: SettingsModel
+  let value: MenuBarValues
+  let title: String
+
+  var body: some View {
+    Toggle(
+      title,
+      isOn: Binding(
+        get: { model.menuBarValues.contains(value) },
+        set: { model.setMenuBar(value, shown: $0) })
+    )
+  }
+}
+
+/// The three global shortcuts, a warning under one that Carbon could not register, and a way back
+/// to the defaults after a shortcut was cleared.
+private struct HotkeySection: View {
+  let checks: Bool
+  @State private var blocked: Set<String> = []
+  @State private var isDefault = true
+
+  private static let rows: [(title: String, name: KeyboardShortcuts.Name)] = [
+    ("Start or stop", .toggleBelt), ("Faster", .speedUp), ("Slower", .speedDown),
+  ]
+
+  var body: some View {
+    Section {
+      ForEach(Self.rows, id: \.name) { row in
+        KeyboardShortcuts.Recorder(row.title, name: row.name)
+        if blocked.contains(row.name.rawValue),
+          let shortcut = KeyboardShortcuts.getShortcut(for: row.name)
+        {
+          Text(
+            verbatim: "\(shortcut) could not be registered: another app probably holds it. "
+              + "Record a different shortcut."
+          )
+          .font(.caption).foregroundStyle(.red)
+        }
+      }
+      HStack {
+        Spacer()
+        Button("Reset to defaults") { KeyboardShortcuts.reset(KeyboardShortcuts.Name.all) }
+          .disabled(isDefault)
+      }
+    } header: {
+      Text("Hotkeys")
+    } footer: {
+      Text("Global: they work in every app. A shortcut another app already holds cannot be used.")
+        .font(.caption)
+        .foregroundStyle(.secondary)
+    }
+    .onAppear(perform: refresh)
+    .onReceive(
+      NotificationCenter.default.publisher(
+        for: Notification.Name("KeyboardShortcuts_shortcutByNameDidChange")),
+      perform: { _ in refresh() })
+  }
+
+  private func refresh() {
+    isDefault = KeyboardShortcuts.Name.all.allSatisfy(\.isDefault)
+    blocked = checks ? Set(KeyboardShortcuts.Name.all.filter(\.isBlocked).map(\.rawValue)) : []
   }
 }
 

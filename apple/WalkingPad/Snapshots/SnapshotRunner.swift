@@ -80,6 +80,7 @@
             AnyView(PopoverView(store: store)), name: "popover-\(scenario.name)", width: 320,
             isPopover: true, dark: dark)
         }
+        failures += await drawMenuBar(dark: dark)
         failures += await drawSettings(dark: dark)
         failures += await drawHistory(dark: dark)
         failures += await drawLive(dark: dark)
@@ -89,7 +90,7 @@
       return failures
     }
 
-    private func popoverStore(_ scenario: Scenario) async -> PadStore {
+    func popoverStore(_ scenario: Scenario) async -> PadStore {
       guard let answer = scenario.answer, let base = Self.base else {
         return PadStore(client: nil)
       }
@@ -118,7 +119,8 @@
         store: store, preferences: preferences, tokens: SnapshotTokens(),
         loginItem: SnapshotLoginItem())
       return await draw(
-        AnyView(SettingsView(model: model)), name: "settings", width: 460, isPopover: false,
+        AnyView(SettingsView(model: model, checksHotkeys: false)), name: "settings", width: 460,
+        isPopover: false,
         dark: dark)
     }
 
@@ -246,7 +248,7 @@
         dark: dark)
     }
 
-    private func draw(
+    func draw(
       _ content: AnyView, name: String, width: CGFloat, height: CGFloat? = nil, isPopover: Bool,
       dark: Bool, title: String = "WalkingPad Settings"
     ) async -> Int {

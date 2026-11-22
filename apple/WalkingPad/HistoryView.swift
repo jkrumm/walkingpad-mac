@@ -92,7 +92,7 @@ private struct HistoryFailure: View {
       HStack {
         Button("Try Again") { Task { await model.reload() } }
           .buttonStyle(.borderedProminent)
-        SettingsButton(label: "Open Settings…", icon: false)
+        SettingsButton(label: "Open Settings", systemImage: "gearshape")
           .buttonStyle(.bordered)
       }
     }
@@ -283,9 +283,11 @@ struct HistoryButton: View {
   @Environment(\.openWindow) private var openWindow
 
   var body: some View {
-    Button("History…") {
+    Button {
       openWindow(id: HistoryView.windowID)
       NSApplication.shared.activate()
+    } label: {
+      Label("History", systemImage: "chart.bar.xaxis")
     }
   }
 }

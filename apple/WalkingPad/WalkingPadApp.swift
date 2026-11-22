@@ -13,7 +13,7 @@ struct WalkingPadApp: App {
     MenuBarExtra {
       PopoverView(store: delegate.store)
     } label: {
-      MenuBarLabel(store: delegate.store)
+      MenuBarLabel(store: delegate.store, settings: delegate.settings)
     }
     .menuBarExtraStyle(.window)
 
@@ -56,6 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     settings.connectSaved()
     let store = store
     polling = Task { await store.run() }
+    HotkeyDefaults.migrate()
     hotkeys = HotkeyListener(store: store)
   }
 }

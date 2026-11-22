@@ -5,8 +5,8 @@ public enum SpeedRange {
   public static let minimum = 0.5
   public static let maximum = 6.0
   public static let step = 0.5
-  /// The quick picks in the popover.
-  public static let presets: [Double] = [2.0, 3.0, 4.0, 5.0]
+  /// The quick picks in the popover: the speeds the owner walks.
+  public static let presets: [Double] = [3.0, 3.5, 4.0, 4.5, 5.0]
   public static let defaultStartSpeed = 3.0
 
   /// Into the range, rounded to 0.1 as the host rounds.

@@ -72,9 +72,13 @@ public struct MenuBarContent: Equatable, Sendable {
   public let symbol: String
   public let text: String?
 
-  /// Speed, elapsed time and distance while walking; today's distance otherwise; no text and a
-  /// distinct symbol when there is no host or no pad.
-  public init(phase: PadPhase, status: Status?, speed: Double, locale: Locale = .current) {
+  /// While walking, the chosen values of speed, the walk's time, distance and steps; otherwise
+  /// today's distance and steps, as far as they are chosen. No text when none is chosen, and a
+  /// distinct symbol and no text when there is no host or no pad.
+  public init(
+    phase: PadPhase, status: Status?, speed: Double, values: MenuBarValues = .all,
+    locale: Locale = .current
+  ) {
     switch phase {
     case .unconfigured:
       self.init(symbol: "gearshape", text: nil)
@@ -85,17 +89,39 @@ public struct MenuBarContent: Equatable, Sendable {
     case .padDisconnected:
       self.init(symbol: "antenna.radiowaves.left.and.right.slash", text: nil)
     case .starting, .active, .stopping:
-      let session = status?.currentSession
-      let parts = [
-        "\(PadFormat.speed(speed, locale: locale)) km/h",
-        session.map { PadFormat.duration($0.durationS) },
-        session.map { PadFormat.distance($0.distanceM, locale: locale) },
-      ]
-      self.init(symbol: "figure.walk", text: parts.compactMap(\.self).joined(separator: " · "))
+      let session = status?.currentSession.map(WalkTotals.init)
+      var parts: [String] = []
+      if values.contains(.speed) { parts.append("\(PadFormat.speed(speed, locale: locale)) km/h") }
+      if let session {
+        parts += Self.totals(session, values: values.subtracting(.speed), locale: locale)
+      }
+      self.init(symbol: "figure.walk", text: Self.join(parts))
     case .standby:
       let today = status.map { WalkTotals(today: $0) } ?? .zero
-      self.init(symbol: "figure.stand", text: PadFormat.distance(today.distanceM, locale: locale))
+      let parts = Self.totals(
+        today, values: values.intersection([.distance, .steps]), locale: locale)
+      self.init(symbol: "figure.stand", text: Self.join(parts))
     }
+  }
+
+  /// Time, distance and steps in that order, short units: digits are monospaced in the label, so
+  /// the width only changes when a number gains a digit.
+  private static func totals(_ totals: WalkTotals, values: MenuBarValues, locale: Locale)
+    -> [String]
+  {
+    var parts: [String] = []
+    if values.contains(.time) { parts.append(PadFormat.duration(totals.durationS)) }
+    if values.contains(.distance) {
+      parts.append(PadFormat.distance(totals.distanceM, locale: locale))
+    }
+    if values.contains(.steps) {
+      parts.append("\(PadFormat.steps(totals.steps, locale: locale)) steps")
+    }
+    return parts
+  }
+
+  private static func join(_ parts: [String]) -> String? {
+    parts.isEmpty ? nil : parts.joined(separator: " · ")
   }
 
   public init(symbol: String, text: String?) {

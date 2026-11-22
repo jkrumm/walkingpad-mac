@@ -49,9 +49,6 @@ private struct PopoverHeader: View {
           Text(device.name).font(.caption).foregroundStyle(.secondary)
         }
       }
-      Spacer()
-      SettingsButton(label: "Settings", icon: true)
-        .buttonStyle(.borderless)
     }
   }
 
@@ -242,7 +239,7 @@ private struct PhaseNotice: View {
       }
       switch store.phase {
       case .unconfigured, .unauthorized:
-        SettingsButton(label: "Open Settings…", icon: false)
+        SettingsButton(label: "Open Settings", systemImage: "gearshape")
           .buttonStyle(.borderedProminent)
       case .hostUnreachable, .padDisconnected:
         Button("Try Again") { Task { await store.refresh() } }
@@ -257,17 +254,15 @@ private struct PhaseNotice: View {
 
 private struct PopoverFooter: View {
   var body: some View {
-    HStack(spacing: 14) {
+    HStack(spacing: 8) {
       HistoryButton()
-        .buttonStyle(.borderless)
-      SettingsButton(label: "Settings…", icon: false)
-        .buttonStyle(.borderless)
+      SettingsButton(label: "Settings", systemImage: "gearshape")
       Spacer()
       Button("Quit") { NSApplication.shared.terminate(nil) }
-        .buttonStyle(.borderless)
         .keyboardShortcut("q")
     }
-    .font(.callout)
+    .buttonStyle(.bordered)
+    .controlSize(.regular)
   }
 }
 
@@ -275,7 +270,7 @@ private struct PopoverFooter: View {
 /// behind the frontmost app.
 struct SettingsButton: View {
   let label: String
-  let icon: Bool
+  let systemImage: String
   @Environment(\.openWindow) private var openWindow
 
   var body: some View {
@@ -283,12 +278,7 @@ struct SettingsButton: View {
       openWindow(id: SettingsView.windowID)
       NSApplication.shared.activate()
     } label: {
-      if icon {
-        Image(systemName: "gearshape").accessibilityLabel(label)
-      } else {
-        Text(label)
-      }
+      Label(label, systemImage: systemImage)
     }
-    .help(label)
   }
 }

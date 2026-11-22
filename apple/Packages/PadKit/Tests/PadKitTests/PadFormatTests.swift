@@ -26,16 +26,64 @@ import Testing
     #expect(today.distanceM == status.today.distanceM + 70)
   }
 
-  @Test func menuBarWhileWalkingShowsSpeedTimeAndDistance() throws {
-    let status = try Fixtures.decode(Status.self, "status-current-session")
-    let content = MenuBarContent(phase: .active, status: status, speed: 3.5, locale: english)
-    #expect(content == MenuBarContent(symbol: "figure.walk", text: "3.5 km/h · 2:00 · 70 m"))
+  /// The title for one phase and choice of values, in English.
+  private func title(
+    _ phase: PadPhase, fixture: String, values: MenuBarValues, speed: Double = 3.5
+  ) throws -> String? {
+    let status = try Fixtures.decode(Status.self, fixture)
+    return MenuBarContent(
+      phase: phase, status: status, speed: speed, values: values, locale: english
+    ).text
   }
 
-  @Test func menuBarWhenIdleShowsTodaysDistance() throws {
+  @Test func menuBarWhileWalkingShowsEverythingByDefault() throws {
+    let status = try Fixtures.decode(Status.self, "status-current-session")
+    let content = MenuBarContent(phase: .active, status: status, speed: 3.5, locale: english)
+    #expect(
+      content
+        == MenuBarContent(symbol: "figure.walk", text: "3.5 km/h · 2:00 · 70 m · 110 steps"))
+    #expect(
+      try title(.active, fixture: "status-current-session", values: .all)
+        == "3.5 km/h · 2:00 · 70 m · 110 steps")
+  }
+
+  @Test func menuBarWhileWalkingFollowsTheChosenValues() throws {
+    let session = "status-current-session"
+    #expect(try title(.active, fixture: session, values: .steps) == "110 steps")
+    #expect(
+      try title(.active, fixture: session, values: [.speed, .steps]) == "3.5 km/h · 110 steps")
+    #expect(try title(.active, fixture: session, values: [.time, .distance]) == "2:00 · 70 m")
+    #expect(try title(.active, fixture: session, values: []) == nil)
+  }
+
+  @Test func menuBarSpeedAloneShowsBeforeTheSessionAppears() throws {
+    let status = try Fixtures.decode(Status.self, "status-standby")
+    let title = { (values: MenuBarValues) in
+      MenuBarContent(
+        phase: .starting, status: status, speed: 0, values: values, locale: english
+      ).text
+    }
+    #expect(title(.all) == "0.0 km/h")
+    #expect(title([.time, .distance, .steps]) == nil)
+  }
+
+  @Test func menuBarWhenIdleShowsTodaysDistanceAndSteps() throws {
     let status = try Fixtures.decode(Status.self, "status-standby")
     let content = MenuBarContent(phase: .standby, status: status, speed: 0, locale: english)
-    #expect(content == MenuBarContent(symbol: "figure.stand", text: "0 m"))
+    #expect(content == MenuBarContent(symbol: "figure.stand", text: "0 m · 0 steps"))
+    #expect(try title(.standby, fixture: "status-standby", values: .steps) == "0 steps")
+    #expect(try title(.standby, fixture: "status-standby", values: .distance) == "0 m")
+    // Speed and time say nothing about a belt that stands.
+    #expect(try title(.standby, fixture: "status-standby", values: [.speed, .time]) == nil)
+    #expect(try title(.standby, fixture: "status-standby", values: []) == nil)
+  }
+
+  @Test func menuBarIdleAddsTheOpenSessionToToday() throws {
+    // A pause between two walks: the host still holds the session, today's totals include it.
+    let status = try Fixtures.decode(Status.self, "status-current-session")
+    let steps = status.today.steps + 110
+    #expect(
+      try title(.standby, fixture: "status-current-session", values: .steps) == "\(steps) steps")
   }
 
   @Test func menuBarHasADistinctSymbolWithoutHostOrPad() {
@@ -53,6 +101,11 @@ import Testing
 }
 
 @Suite struct SpeedRangeTests {
+  @Test func presetsAreTheSpeedsTheOwnerWalks() {
+    #expect(SpeedRange.presets == [3.0, 3.5, 4.0, 4.5, 5.0])
+    #expect(SpeedRange.presets.allSatisfy { $0 == SpeedRange.clamp($0) })
+  }
+
   @Test(arguments: [
     (3.0, 1, 3.5), (3.2, 1, 3.5), (3.0, -1, 2.5), (3.2, -1, 3.0), (5.8, 1, 6.0), (6.0, 1, 6.0),
     (0.5, -1, 0.5), (0, 1, 0.5), (4.5, 2, 5.5),
@@ -65,6 +118,22 @@ import Testing
     #expect(SpeedRange.clamp(0.1) == 0.5)
     #expect(SpeedRange.clamp(7) == 6.0)
     #expect(SpeedRange.clamp(3.04) == 3.0)
+  }
+}
+
+@Suite struct LoginItemStateTests {
+  @Test func theToggleReadsOnWhenRegisteredOrAwaitingApproval() {
+    #expect(LoginItemState.enabled.isOn)
+    #expect(LoginItemState.requiresApproval.isOn)
+    #expect(!LoginItemState.disabled.isOn)
+    #expect(!LoginItemState.notFound.isOn)
+  }
+
+  @Test func everyStateThatIsNotPlainlyOnOrOffSaysWhy() {
+    #expect(LoginItemState.enabled.note == nil)
+    #expect(LoginItemState.disabled.note == nil)
+    #expect(LoginItemState.requiresApproval.note?.contains("Login Items") == true)
+    #expect(LoginItemState.notFound.note?.contains("Applications") == true)
   }
 }
 
