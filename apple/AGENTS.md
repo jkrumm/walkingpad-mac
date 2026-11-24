@@ -29,7 +29,7 @@ Loaded when a file under `apple/` is read. Paths are from the repo root. Parent:
 - Launch at login is never a disabled toggle: `SMAppService.mainApp` reports `notFound` for an app that has not
   registered yet, so the toggle always tries `register()` and shows the result or the error (`LoginItemState` in PadKit).
 - KeyboardShortcuts writes a Name's `initial:` shortcut into UserDefaults on first read, so changing a default reaches no
-  existing install: `HotkeyDefaults.migrate` moves a stored shortcut that still equals the old default, once. It drops a
+  existing install: `HotkeyDefaults.migrate` (rule and tests: PadKit `HotkeyMigration`, bump `version` with a default change) moves a stored shortcut that still equals a previous default, once. It drops a
   failed Carbon registration silently; Settings reads `KeyboardShortcuts.isEnabled(for:)` to warn (the snapshot build runs no
   listener and skips it). The menu bar title's values are `MenuBarValues` (PadKit, UserDefaults `menuBarValues`).
 - The app icon is `apple/branding/AppIcon.icns` split into `apple/WalkingPad/Assets.xcassets/AppIcon.appiconset`

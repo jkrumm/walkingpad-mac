@@ -5,15 +5,15 @@ import PadKit
 /// The global hotkeys. KeyboardShortcuts registers them through Carbon, which needs no
 /// Accessibility permission, and stores what the user records in UserDefaults.
 extension KeyboardShortcuts.Name {
-  /// Control-Option-Command-W.
+  /// Control-Option-Command-Delete (Hyper+Backspace).
   static let toggleBelt = Self(
-    "toggleBelt", initial: .init(.w, modifiers: [.control, .option, .command]))
-  /// Control-Option-Command-Shift-Up: Hyper+Up and Hyper+Down belong to Spotify's volume.
+    "toggleBelt", initial: .init(.delete, modifiers: [.control, .option, .command]))
+  /// Control-Option-Command-Up.
   static let speedUp = Self(
-    "speedUp", initial: .init(.upArrow, modifiers: [.control, .option, .command, .shift]))
-  /// Control-Option-Command-Shift-Down.
+    "speedUp", initial: .init(.upArrow, modifiers: [.control, .option, .command]))
+  /// Control-Option-Command-Down.
   static let speedDown = Self(
-    "speedDown", initial: .init(.downArrow, modifiers: [.control, .option, .command, .shift]))
+    "speedDown", initial: .init(.downArrow, modifiers: [.control, .option, .command]))
 
   static let all: [Self] = [.toggleBelt, .speedUp, .speedDown]
 
@@ -28,26 +28,22 @@ extension KeyboardShortcuts.Name {
   @MainActor var isDefault: Bool { KeyboardShortcuts.getShortcut(for: self) == initialShortcut }
 }
 
-/// KeyboardShortcuts stores an initial shortcut the first time it reads it, so every install holds
-/// the speed shortcuts it first shipped with, Control-Option-Command-Up and -Down, which a
-/// Hyper-key setup uses for Spotify's volume. One time, a stored shortcut that still equals that
-/// first default moves to the current default; anything else the user recorded stays.
+/// Hands the stored shortcuts to PadKit's `HotkeyMigration`, which resets one that still equals a
+/// previous default (the rule and its tests live there).
 enum HotkeyDefaults {
-  private static let versionKey = "hotkeyDefaultsVersion"
-  private static let version = 2
-
   @MainActor
   static func migrate(defaults: UserDefaults = .standard) {
-    guard defaults.integer(forKey: versionKey) < version else { return }
-    defaults.set(version, forKey: versionKey)
-    let hyper: NSEvent.ModifierFlags = [.control, .option, .command]
-    let first: [(KeyboardShortcuts.Name, KeyboardShortcuts.Shortcut)] = [
-      (.speedUp, .init(.upArrow, modifiers: hyper)),
-      (.speedDown, .init(.downArrow, modifiers: hyper)),
-    ]
-    for (name, shortcut) in first where KeyboardShortcuts.getShortcut(for: name) == shortcut {
-      KeyboardShortcuts.reset(name)
-    }
+    // The shipped Names carry the initial shortcut a reset restores; a Name rebuilt from its string would not.
+    let names = Dictionary(
+      uniqueKeysWithValues: KeyboardShortcuts.Name.all.map { ($0.rawValue, $0) })
+    HotkeyMigration.migrate(
+      defaults: defaults,
+      stored: { name in
+        names[name].flatMap { KeyboardShortcuts.getShortcut(for: $0) }.map {
+          HotkeyBinding(keyCode: $0.carbonKeyCode, modifiers: $0.carbonModifiers)
+        }
+      },
+      reset: { name in names[name].map { KeyboardShortcuts.reset($0) } })
   }
 }
 
