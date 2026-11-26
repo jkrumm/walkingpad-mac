@@ -39,6 +39,9 @@ for agents.
 | `make check-fast` | gofmt, vet, golangci-lint, `go test -race`, raycast `tsc`, `swift format lint`, SwiftLint, `swift test` of PadKit; no xcodebuild | a lead, before every push |
 | `make check` | check-fast plus `make check-apple` (xcodegen, xcodebuild of the app through `scripts/apple-slot.sh`) | CI (`.github/workflows/ci.yml`, hosted macOS) on every push and PR |
 
+Every xcodebuild in the Makefile runs through `$(XCB)`: `nice -n 10`, `-jobs 2` and the matching
+`IDEBuildOperationMaxNumberOfConcurrentCompileTasks` (`SWIFT_JOBS`, off in CI). Uncapped it spawned a compile per core and
+peaked the `walkingpad-mac-apple` slot step at ~2.9 GiB; capped, one run peaked at ~1.1 GiB.
 `project.yaml` `checks` names the tiers. Run `make check-apple` locally only when you changed
 `apple/project.yml` or app code: it takes the mini's one Apple lock, shared with iris and ntfy-mac.
 `make fmt` fixes Go and Swift formatting; `make contracts` rewrites the API fixtures. lefthook

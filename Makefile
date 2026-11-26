@@ -21,6 +21,12 @@ SWIFT_FILES   := apple/WalkingPad apple/Packages/PadKit/Sources apple/Packages/P
 PADKIT        := apple/Packages/PadKit
 TOOLS         := scripts/tools.sh
 APPLE_SLOT    := scripts/apple-slot.sh
+# Build jobs cap for every xcodebuild here: the uncapped build starts one swift-frontend per core (12), which peaked the
+# walkingpad-mac-apple slot step at ~2.9 GiB. Two jobs at low priority, as iris does; CI (CI set) has a runner of its own.
+SWIFT_JOBS    ?= 2
+XCB_NICE      := $(if $(CI),,nice -n 10)
+XCB_CAP       := $(if $(CI),,-jobs $(SWIFT_JOBS) IDEBuildOperationMaxNumberOfConcurrentCompileTasks=$(SWIFT_JOBS))
+XCB           := $(XCB_NICE) xcodebuild $(XCB_CAP)
 # make snapshots: a separate Debug build with SNAPSHOT_HARNESS (own derived data, so the app that
 # check-apple builds never contains the harness); PNGs land in SNAP_DIR.
 SNAP_APP      := apple/.dd-snap/Build/Products/Debug/WalkingPad.app
@@ -66,7 +72,7 @@ check-fast: ## the lead's tier, no xcodebuild: gofmt, vet, golangci-lint, go tes
 
 check-apple: ## xcodegen + xcodebuild of apple/WalkingPad through scripts/apple-slot.sh (one Xcode job on the mini)
 	cd apple && "$$(../$(TOOLS) xcodegen)" generate --quiet
-	$(APPLE_SLOT) xcodebuild -project apple/WalkingPad.xcodeproj -scheme WalkingPad -configuration Debug \
+	$(APPLE_SLOT) $(XCB) -project apple/WalkingPad.xcodeproj -scheme WalkingPad -configuration Debug \
 	  -destination 'platform=macOS' -derivedDataPath apple/.dd CODE_SIGNING_ALLOWED=NO build
 
 lint-swift: ## swift format lint + SwiftLint (pinned by scripts/tools.sh) over apple/
@@ -79,7 +85,7 @@ test-swift: ## swift test of apple/Packages/PadKit (decodes contracts/fixtures)
 
 snapshots: ## draw the popover in every state and Settings, light and dark, offscreen into SNAP_DIR (SNAP_LIVE_URL adds the live host, GETs only)
 	cd apple && "$$(../$(TOOLS) xcodegen)" generate --quiet
-	$(APPLE_SLOT) xcodebuild -project apple/WalkingPad.xcodeproj -scheme WalkingPad -configuration Debug \
+	$(APPLE_SLOT) $(XCB) -project apple/WalkingPad.xcodeproj -scheme WalkingPad -configuration Debug \
 	  -destination 'platform=macOS' -derivedDataPath apple/.dd-snap CODE_SIGNING_ALLOWED=NO \
 	  SWIFT_ACTIVE_COMPILATION_CONDITIONS='$$(inherited) SNAPSHOT_HARNESS' build
 	home=$$(mktemp -d) && trap 'rm -r "$$home"' EXIT && \
@@ -87,7 +93,7 @@ snapshots: ## draw the popover in every state and Settings, light and dark, offs
 
 app-release: ## Release build of the menu bar app, Developer ID signed, notarized and stapled into CLIENT_APP (NOTARIZE=0 signs only)
 	cd apple && "$$(../$(TOOLS) xcodegen)" generate --quiet
-	$(APPLE_SLOT) xcodebuild -project apple/WalkingPad.xcodeproj -scheme WalkingPad -configuration Release \
+	$(APPLE_SLOT) $(XCB) -project apple/WalkingPad.xcodeproj -scheme WalkingPad -configuration Release \
 	  -destination 'platform=macOS' -derivedDataPath $(CLIENT_DD) CODE_SIGNING_ALLOWED=NO ARCHS=arm64 ONLY_ACTIVE_ARCH=NO \
 	  MARKETING_VERSION=$(VERSION) CURRENT_PROJECT_VERSION=$$(git rev-list --count HEAD) build
 	rm -rf "$(CLIENT_APP)" && mkdir -p "$(CLIENT_DIR)" && ditto $(CLIENT_BUILT) "$(CLIENT_APP)"
