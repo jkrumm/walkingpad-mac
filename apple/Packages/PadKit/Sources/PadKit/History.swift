@@ -26,6 +26,13 @@ public enum HistoryDates {
     return calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2]))
   }
 
+  /// Whole calendar days from `day` to `now`: 0 today, 1 yesterday, negative for a future day.
+  public static func daysAgo(_ day: Date, now: Date, calendar: Calendar) -> Int {
+    let from = calendar.startOfDay(for: day)
+    let to = calendar.startOfDay(for: now)
+    return calendar.dateComponents([.day], from: from, to: to).day ?? 0
+  }
+
   /// The `days` days ending today, today included.
   public static func window(days: Int, now: Date, calendar: Calendar) -> (from: String, to: String)
   {

@@ -247,7 +247,10 @@ private struct DaySection: View {
     let calendar = Calendar.current
     if calendar.isDateInToday(day.day) { return "Today" }
     if calendar.isDateInYesterday(day.day) { return "Yesterday" }
-    return day.day.formatted(.dateTime.weekday(.wide).day().month(.wide).year())
+    let date = day.day.formatted(.dateTime.weekday(.wide).day().month(.wide).year())
+    let ago = HistoryDates.daysAgo(day.day, now: Date(), calendar: calendar)
+    guard ago >= 2 else { return date }
+    return "\(date) · \(ago) days ago"
   }
 }
 

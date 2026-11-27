@@ -173,6 +173,12 @@ enum HistoryClock {
     #expect(window.from == from && window.to == to)
   }
 
+  @Test(arguments: [("2026-05-19", 0), ("2026-05-18", 1), ("2026-05-17", 2), ("2026-04-19", 30)])
+  func daysAgoCountsCalendarDays(day: String, ago: Int) throws {
+    let date = try #require(HistoryDates.date(day, calendar: Self.utc))
+    #expect(HistoryDates.daysAgo(date, now: HistoryClock.now, calendar: Self.utc) == ago)
+  }
+
   @Test func datesRoundTrip() throws {
     let date = try #require(HistoryDates.date("2026-05-17", calendar: Self.utc))
     #expect(HistoryDates.string(date, calendar: Self.utc) == "2026-05-17")
