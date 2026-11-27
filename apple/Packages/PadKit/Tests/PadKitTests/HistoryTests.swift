@@ -132,6 +132,11 @@ enum HistoryClock {
     #expect(!history.isEmpty(.days30))
   }
 
+  @Test func daysAgoCountsFromTheStoreClock() throws {
+    let day = try #require(HistoryDates.date("2026-05-17", calendar: Self.utc))
+    #expect(store(HistoryHost(Self.populated)).daysAgo(day) == 2)
+  }
+
   @Test func loadMoreAppendsOlderSessionsWithoutDuplicates() async {
     let host = HistoryHost(Self.populated)
     let history = store(host, pageSize: 3)

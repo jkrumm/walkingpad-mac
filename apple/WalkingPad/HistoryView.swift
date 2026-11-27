@@ -204,7 +204,7 @@ private struct SessionList: View {
     VStack(alignment: .leading, spacing: 14) {
       Text("Walks").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
       ForEach(model.groupedSessions) { day in
-        DaySection(day: day, open: open)
+        DaySection(day: day, daysAgo: model.daysAgo(day.day), open: open)
       }
       if model.canLoadMore {
         HStack {
@@ -223,6 +223,7 @@ private struct SessionList: View {
 
 private struct DaySection: View {
   let day: SessionDay
+  let daysAgo: Int
   let open: (Session) -> Void
 
   var body: some View {
@@ -248,9 +249,8 @@ private struct DaySection: View {
     if calendar.isDateInToday(day.day) { return "Today" }
     if calendar.isDateInYesterday(day.day) { return "Yesterday" }
     let date = day.day.formatted(.dateTime.weekday(.wide).day().month(.wide).year())
-    let ago = HistoryDates.daysAgo(day.day, now: Date(), calendar: calendar)
-    guard ago >= 2 else { return date }
-    return "\(date) · \(ago) days ago"
+    guard daysAgo >= 2 else { return date }
+    return "\(date) · \(daysAgo) days ago"
   }
 }
 

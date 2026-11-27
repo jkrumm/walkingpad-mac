@@ -147,6 +147,11 @@ public final class HistoryStore {
 
   public var groupedSessions: [SessionDay] { SessionGrouping.byDay(sessions, calendar: calendar) }
 
+  /// Whole calendar days from `day` to the store's today, the day its window ends on.
+  public func daysAgo(_ day: Date) -> Int {
+    HistoryDates.daysAgo(day, now: now(), calendar: calendar)
+  }
+
   /// Loads everything again; the data on screen stays until the new answers are in.
   public func reload() async {
     guard let client = client() else {
