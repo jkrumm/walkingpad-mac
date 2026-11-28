@@ -23,7 +23,9 @@ TOOLS         := scripts/tools.sh
 APPLE_SLOT    := scripts/apple-slot.sh
 # Build jobs cap for every xcodebuild here: the uncapped build starts one swift-frontend per core (12), which peaked the
 # walkingpad-mac-apple slot step at ~2.9 GiB. Two jobs at low priority, as iris does; CI (CI set) has a runner of its own.
+# swift test is capped at the same job count: uncapped, a cold build peaked the fast step at ~3.1 GiB (~0.9 GiB at two).
 SWIFT_JOBS    ?= 2
+SPM_CAP       := $(if $(CI),,--jobs $(SWIFT_JOBS))
 XCB_NICE      := $(if $(CI),,nice -n 10)
 XCB_CAP       := $(if $(CI),,-jobs $(SWIFT_JOBS) IDEBuildOperationMaxNumberOfConcurrentCompileTasks=$(SWIFT_JOBS))
 XCB           := $(XCB_NICE) xcodebuild $(XCB_CAP)
@@ -81,7 +83,7 @@ lint-swift: ## swift format lint + SwiftLint (pinned by scripts/tools.sh) over a
 	"$$($(TOOLS) swiftlint)" lint --strict --no-cache --quiet
 
 test-swift: ## swift test of apple/Packages/PadKit (decodes contracts/fixtures)
-	cd $(PADKIT) && swift test
+	cd $(PADKIT) && swift test $(SPM_CAP)
 
 snapshots: ## draw the popover in every state and Settings, light and dark, offscreen into SNAP_DIR (SNAP_LIVE_URL adds the live host, GETs only)
 	cd apple && "$$(../$(TOOLS) xcodegen)" generate --quiet
@@ -107,7 +109,7 @@ install-macbook: ## pull the built app onto the MacBook (one approval dialog): v
 	scripts/install-macbook.sh "$(CLIENT_APP)"
 
 test-live: ## PadKit decodes GET /status and /sessions from the live host (reads only)
-	cd $(PADKIT) && PADKIT_LIVE_URL=http://127.0.0.1:$(HTTP_PORT) swift test --filter LiveHostTests
+	cd $(PADKIT) && PADKIT_LIVE_URL=http://127.0.0.1:$(HTTP_PORT) swift test $(SPM_CAP) --filter LiveHostTests
 
 contracts: ## rewrite contracts/fixtures from the API handlers after an intended response change
 	go test ./internal/api -run TestContractFixtures -count=1 -update

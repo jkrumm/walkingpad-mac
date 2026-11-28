@@ -42,6 +42,8 @@ for agents.
 Every xcodebuild in the Makefile runs through `$(XCB)`: `nice -n 10`, `-jobs 2` and the matching
 `IDEBuildOperationMaxNumberOfConcurrentCompileTasks` (`SWIFT_JOBS`, off in CI). Uncapped it spawned a compile per core and
 peaked the `walkingpad-mac-apple` slot step at ~2.9 GiB; capped, one run peaked at ~1.1 GiB.
+`swift test` takes the same cap (`--jobs $(SWIFT_JOBS)`, off in CI): uncapped, a cold build peaked `check-fast` at ~3.1 GiB;
+capped, a cold `check-fast` peaked at ~1.3 GiB.
 `project.yaml` `checks` names the tiers. Run `make check-apple` locally only when you changed
 `apple/project.yml` or app code: it takes the mini's one Apple lock, shared with iris and ntfy-mac.
 `make fmt` fixes Go and Swift formatting; `make contracts` rewrites the API fixtures. lefthook
